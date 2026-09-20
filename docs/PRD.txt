@@ -1,0 +1,729 @@
+# Product Requirements Document
+## Employee Onboarding & Zoho Provisioning Portal
+
+**Version:** 1.1  
+**Product:** Internal Employee Onboarding System  
+**Primary Users:** New Employees and Auditors  
+**Deployment:** Cloud-hosted Web Application  
+**AI Dependency:** None
+
+---
+
+# 1. Product Overview
+
+The Employee Onboarding & Zoho Provisioning Portal will replace the existing Google Form and Google Sheets based onboarding workflow with a dedicated web application.
+
+Currently, a new employee receives a Google Form, completes their personal and employment information, and submits it. The response is stored in Google Sheets.
+
+An Auditor then manually reviews the employee's submission, determines the appropriate account configuration, creates the employee's Zoho account, assigns the necessary access based on their role or department, and sends the newly created Zoho email/account information to the employee.
+
+The new application will combine these activities into one controlled workflow.
+
+The employee will continue to have a simple form experience, while the Auditor will receive a dedicated dashboard for reviewing submissions and provisioning Zoho accounts.
+
+---
+
+# 2. Current Workflow
+
+```text
+Employee
+   ↓
+Google Form
+   ↓
+Google Sheet
+   ↓
+Auditor manually checks submission
+   ↓
+Auditor determines account configuration
+   ↓
+Auditor opens Zoho Admin
+   ↓
+Creates Zoho User
+   ↓
+Assigns appropriate permissions
+   ↓
+Gets newly created Zoho email
+   ↓
+Sends account information to Employee
+```
+
+The objective is to eliminate most of the work after the employee submits the form.
+
+---
+
+# 3. Proposed Workflow
+
+```text
+Employee
+   ↓
+Onboarding Web Form
+   ↓
+Submit
+   ↓
+Database
+   ↓
+Rules Engine
+   ↓
+Auditor Dashboard
+   ↓
+Review Employee
+   ↓
+"Create Zoho User"
+   ↓
+Zoho User Provisioning
+   ↓
+Assign Role / Groups
+   ↓
+Account Created
+   ↓
+Send Account Information
+   ↓
+Employee receives Zoho email details
+   ↓
+Completed
+```
+
+The Auditor remains responsible for approving account creation.
+
+The system handles the repetitive provisioning steps.
+
+---
+
+# 4. User Types
+
+## Employee
+
+The Employee does not require access to the administrative portal.
+
+They receive a secure onboarding form link and provide the required information.
+
+Depending on security requirements, the form may use:
+
+- a unique invitation link;
+- a time-limited token;
+- an employee/onboarding reference;
+- or another lightweight verification method.
+
+The employee can only access their own onboarding form.
+
+---
+
+## Auditor
+
+The Auditor signs into the administrative portal.
+
+Auditors can:
+
+- view submitted onboarding forms;
+- search employees;
+- review employee information;
+- see recommended account configuration;
+- edit permitted account settings;
+- create Zoho users;
+- assign approved roles/groups;
+- send account information;
+- view provisioning failures;
+- retry failed actions;
+- view onboarding history.
+
+---
+
+## Administrator
+
+Administrators can additionally:
+
+- manage Auditors;
+- manage departments;
+- manage teams;
+- manage job positions;
+- configure account rules;
+- configure permission mappings;
+- manage Zoho integration;
+- review system-wide audit logs.
+
+---
+
+# 5. Employee Onboarding Form
+
+The public-facing portion of the application should be extremely simple.
+
+Example:
+
+```text
+────────────────────────────────────
+
+        Employee Onboarding
+
+Welcome!
+
+Please provide the following information
+to complete your onboarding.
+
+First Name
+[____________________________]
+
+Last Name
+[____________________________]
+
+Personal Email
+[____________________________]
+
+Phone Number
+[____________________________]
+
+Department
+[ Select Department ▼ ]
+
+Team
+[ Select Team ▼ ]
+
+Job Position
+[ Select Position ▼ ]
+
+Joining Date
+[ DD / MM / YYYY ]
+
+             [ Submit ]
+
+────────────────────────────────────
+```
+
+Some employment information should ideally be pre-populated by HR rather than employee-selected if that information controls permissions.
+
+For example, allowing an employee to select:
+
+> Job Position: Administrator
+
+and then automatically granting Administrator permissions would create an obvious security problem.
+
+Therefore, the system should distinguish between:
+
+**Employee-provided information**
+
+and
+
+**organization-controlled information.**
+
+---
+
+# 6. Onboarding Invitation
+
+The preferred workflow should eventually allow an Auditor/HR user to create an onboarding invitation.
+
+Example:
+
+```text
+New Onboarding
+
+Employee:
+Samiul Alam
+
+Personal Email:
+samiul@gmail.com
+
+Department:
+Service Delivery
+
+Team:
+Operations
+
+Position:
+Operations Executive
+
+Joining Date:
+25 September 2026
+
+          [Send Onboarding Form]
+```
+
+The application generates something similar to:
+
+```text
+https://onboarding.company.com/start/<secure-token>
+```
+
+The employee receives the link.
+
+This allows organizational information to be established before the employee fills out the form.
+
+---
+
+# 7. Employee Submission
+
+Once submitted, the employee should see:
+
+```text
+✓ Information Submitted
+
+Thank you.
+
+Your onboarding information has been
+successfully submitted.
+
+Your account information will be sent
+to you after your onboarding request
+has been processed.
+```
+
+The employee should not see administrative provisioning controls.
+
+---
+
+# 8. Auditor Dashboard
+
+After logging in, the Auditor sees:
+
+```text
+Employee Onboarding
+
+┌────────────────┐ ┌────────────────┐
+│ New Requests   │ │ Failed         │
+│      12        │ │       2        │
+└────────────────┘ └────────────────┘
+
+┌────────────────┐ ┌────────────────┐
+│ Provisioning   │ │ Completed      │
+│       3        │ │      148       │
+└────────────────┘ └────────────────┘
+
+
+NEW SUBMISSIONS
+
+Employee        Position             Status
+
+Samiul Alam     Operations Exec      ● New
+John Smith      Modeler              ● New
+Sarah Khan      HR Executive         ● Review
+```
+
+The primary queue should be **New Submissions**.
+
+---
+
+# 9. Employee Review Screen
+
+Opening an employee should provide the Auditor with everything necessary to make the provisioning decision.
+
+```text
+Samiul Alam                         NEW
+
+EMPLOYEE INFORMATION
+
+Personal Email
+samiul@gmail.com
+
+Department
+Service Delivery
+
+Team
+Operations
+
+Position
+Operations Executive
+
+Joining Date
+25 September 2026
+
+
+───────────────────────────────────
+
+PROPOSED ACCOUNT
+
+Provider
+ZOHO
+
+Email
+samiul.alam@company.com
+
+Role
+Standard User
+
+Groups
+✓ Operations
+✓ All Employees
+
+───────────────────────────────────
+
+             [ Create Zoho User ]
+```
+
+This should become the main operational screen for Auditors.
+
+---
+
+# 10. Rules Engine
+
+The system should calculate the expected account configuration using predefined rules.
+
+For example:
+
+```text
+Employee Submission
+        ↓
+Department + Team + Position
+        ↓
+Provisioning Rules
+        ↓
+Account Provider
+        ↓
+Role
+        ↓
+Groups
+        ↓
+Permissions
+```
+
+No AI should participate in this decision.
+
+Rules should be deterministic and auditable.
+
+---
+
+# 11. Zoho User Creation
+
+When the Auditor clicks:
+
+**Create Zoho User**
+
+the application must show the final configuration before executing the action.
+
+Example:
+
+```text
+Create Zoho User?
+
+Employee
+Samiul Alam
+
+Email
+samiul.alam@company.com
+
+Role
+Operations User
+
+Groups
+Operations
+All Employees
+
+              Cancel    Create User
+```
+
+After confirmation, the backend begins provisioning.
+
+---
+
+# 12. Provisioning Sequence
+
+The backend should perform each operation independently and record its result.
+
+```text
+Creating Zoho Account...
+
+✓ Employee validated
+
+✓ Email availability checked
+
+✓ Zoho user created
+
+✓ Zoho Mail enabled
+
+✓ Operations group assigned
+
+✓ All Employees group assigned
+
+✓ Account configuration verified
+
+○ Sending account information...
+```
+
+When complete:
+
+```text
+✓ Provisioning Complete
+
+samiul.alam@company.com
+
+Account information has been sent
+to the employee.
+
+                 [Done]
+```
+
+---
+
+# 13. Sending the Zoho Account to the Employee
+
+This is a core requirement.
+
+After successful account creation, the application should send the employee their account information through the approved delivery mechanism.
+
+The message would normally go to the employee's **personal email address collected during onboarding**.
+
+It should contain appropriate onboarding information such as:
+
+- employee's new corporate email;
+- Zoho login instructions;
+- organization login URL;
+- account activation instructions;
+- support/contact information.
+
+Passwords or temporary credentials should only be transmitted according to the organization's approved security policy and Zoho's supported account activation mechanism.
+
+The application should record:
+
+```text
+Account notification
+Sent ✓
+
+Recipient
+samiul@gmail.com
+
+Sent
+18 Sep 2026 — 10:42 PM
+```
+
+---
+
+# 14. Resend Account Information
+
+Auditors should have:
+
+**Resend Account Information**
+
+on completed requests.
+
+Example:
+
+```text
+ZOHO ACCOUNT
+
+samiul.alam@company.com
+
+Status
+Active
+
+Account Information
+Sent Sep 18, 10:42 PM
+
+[Resend Account Information]
+```
+
+Every resend should be recorded in the audit log.
+
+---
+
+# 15. Provisioning Failures
+
+The application must distinguish between account creation and subsequent configuration.
+
+For example:
+
+```text
+PARTIALLY PROVISIONED
+
+Employee
+Samiul Alam
+
+Zoho Account
+samiul.alam@company.com
+
+✓ User created
+✓ Mail enabled
+✗ Operations group
+✓ All Employees group
+○ Account information not sent
+
+Failure:
+Unable to assign Operations group.
+
+             [Retry]
+```
+
+Clicking Retry should retry the failed operation.
+
+It must **not create another Zoho account**.
+
+---
+
+# 16. Workflow Statuses
+
+The simplified workflow should be:
+
+```text
+INVITED
+   ↓
+FORM_OPENED
+   ↓
+SUBMITTED
+   ↓
+PENDING_REVIEW
+   ↓
+APPROVED
+   ↓
+PROVISIONING
+   ↓
+ACCOUNT_CREATED
+   ↓
+NOTIFICATION_SENT
+   ↓
+COMPLETED
+```
+
+Exception states:
+
+```text
+REJECTED
+
+RETURNED
+
+PROVISIONING_FAILED
+
+PARTIALLY_PROVISIONED
+
+CANCELLED
+```
+
+---
+
+# 17. Audit Trail
+
+Every onboarding record should contain a complete timeline.
+
+Example:
+
+```text
+ONB-2026-0184
+Samiul Alam
+
+Sep 18  8:12 PM
+Onboarding form submitted
+
+Sep 18  10:34 PM
+Reviewed by Auditor
+
+Sep 18  10:35 PM
+Zoho provisioning initiated
+
+Sep 18  10:35 PM
+Zoho account created
+samiul.alam@company.com
+
+Sep 18  10:35 PM
+Operations group assigned
+
+Sep 18  10:35 PM
+All Employees group assigned
+
+Sep 18  10:36 PM
+Account information sent
+→ samiul@gmail.com
+
+Sep 18  10:36 PM
+Onboarding completed
+```
+
+This gives the organization a much stronger audit record than the current spreadsheet workflow.
+
+---
+
+# 18. Security Boundary
+
+A critical security rule is:
+
+**Employee-submitted information must never directly determine privileged access.**
+
+For example:
+
+```text
+Employee says:
+Department = HR
+        ↓
+        ✗
+Automatically give HR access
+```
+
+Instead:
+
+```text
+Employee information
+        ↓
+Company onboarding record
+        ↓
+Provisioning rule
+        ↓
+Auditor review
+        ↓
+Approved permissions
+        ↓
+Zoho
+```
+
+Where possible, Department, Team, Position, Manager and similar authorization-relevant attributes should originate from HR/Auditor-controlled data.
+
+---
+
+# 19. MVP Requirements
+
+The first release should include:
+
+### Employee Side
+
+- Secure onboarding form
+- Personal information collection
+- Form validation
+- Submission confirmation
+- Mobile-friendly interface
+
+### Auditor Side
+
+- Secure authentication
+- New-submission dashboard
+- Employee details
+- Search
+- Filters
+- Proposed Zoho account
+- Email generation
+- Permission preview
+- Create Zoho User
+- Role/group assignment
+- Provisioning status
+- Retry failed provisioning
+- Send account information
+- Resend account information
+- Audit history
+
+### Administration
+
+- Department configuration
+- Team configuration
+- Job-position configuration
+- Permission mappings
+- Provisioning rules
+- Auditor access
+- Zoho integration configuration
+
+---
+
+# 20. Core MVP User Story
+
+> As a new employee, I receive an onboarding link, complete the required information, and submit the form.
+
+> As an Auditor, I see the new employee in my onboarding dashboard, review their information and proposed account configuration, and click **Create Zoho User**.
+
+> The system creates the appropriate Zoho account, applies the configured access, records the operation, and sends the employee their new corporate account information.
+
+The Auditor should no longer need to copy information from Google Sheets, manually create a standard Zoho user, manually reproduce standard permissions, or manually compose the standard account-delivery email.
+
+---
+
+# 21. Product Success Definition
+
+The product succeeds when the standard onboarding process changes from:
+
+**Google Form → Google Sheet → manually inspect → open Zoho → manually create user → manually configure user → manually send email**
+
+to:
+
+**Onboarding Form → Auditor Dashboard → Review → Create Zoho User → Done.**
+
+Human control remains at the point where corporate access is authorized, while repetitive provisioning and communication are automated.

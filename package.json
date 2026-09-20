@@ -1,0 +1,20 @@
+{
+  "name": "employee-onboarding-prototype",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "test": "npm test -w backend",
+    "lint": "npm run lint -w frontend",
+    "typecheck": "npm run typecheck -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "latest"
+  },
+  "dependencies": {
+    "mongoose": "^9.10.1"
+  }
+}
