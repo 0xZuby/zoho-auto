@@ -1,4 +1,19 @@
-node_modules
-.next
+node_modules/
+.next/
+out/
+dist/
+build/
 .env
-coverage
+.env.local
+.env*.local
+*.log
+npm-debug.log*
+
+# Runtime data store (contains submitted employee data)
+backend/data/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+next-env.d.ts

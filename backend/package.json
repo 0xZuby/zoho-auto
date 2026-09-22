@@ -1,16 +1,23 @@
 {
   "name": "onboarding-api",
+  "version": "1.0.0",
   "private": true,
+  "description": "Express API for the Employee Onboarding & Zoho Provisioning Portal",
   "type": "module",
+  "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
-    "cors": "latest",
-    "dotenv": "latest",
-    "express": "latest",
-    "mongodb": "^7.6.0"
+    "cookie-parser": "1.4.7",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.22.3",
+    "helmet": "8.0.0"
+  },
+  "engines": {
+    "node": ">=20.11.0"
   }
 }

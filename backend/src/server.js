@@ -1,12 +1,9 @@
-import 'dotenv/config';
-import { MongoClient } from 'mongodb';
 import { createApp } from './app.js';
+import { env } from './config/env.js';
 
-const uri = process.env.MONGODB_URI;
-if (!uri) throw new Error('MONGODB_URI is required. Copy .env.example to .env and configure MongoDB.');
-const client = new MongoClient(uri);
-await client.connect();
-const db = client.db(process.env.MONGODB_DB || 'onboarding_prototype');
-const app = createApp(db.collection('onboardingRequests'), { emailDomain: process.env.CORPORATE_EMAIL_DOMAIN || 'example.company' });
-const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`Onboarding API listening on http://localhost:${port}`));
+const app = await createApp(env);
+
+app.listen(env.PORT, () => {
+  console.log(`[server] Onboarding API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
+  console.log(`[server] Zoho mode: ${env.ZOHO_MODE} | Mail mode: ${env.MAIL_MODE}`);
+});
