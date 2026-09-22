@@ -9,7 +9,7 @@ import {
   submitOnboardingForm,
   updateEmployeeInfo,
 } from '@/lib/form-api';
-import type { EmployeeDirectoryEntry, FormCatalog, RequestType } from '@/lib/types';
+import type { EmployeeDirectoryEntry, FormCatalog } from '@/lib/types';
 import { validateStageOne, validateStageThree, validateStageTwo } from '@/lib/validate-onboarding-form';
 import { useOnboardingForm } from './useOnboardingForm';
 import { StageIndicator } from './components/StageIndicator';
@@ -23,28 +23,11 @@ import { UpdateEmployeeStage } from './components/UpdateEmployeeStage';
 
 type WizardStage = 1 | 2 | 3;
 
-const STAGE_TITLES: Record<RequestType | '', { step: number; title: string }[]> = {
-  '': [
-    { step: 1, title: 'Request' },
-    { step: 2, title: 'Details' },
-    { step: 3, title: 'Review & submit' },
-  ],
-  NEW_HIRE: [
-    { step: 1, title: 'Request' },
-    { step: 2, title: 'Employee & placement' },
-    { step: 3, title: 'Review & submit' },
-  ],
-  LEAVING_COMPANY: [
-    { step: 1, title: 'Request' },
-    { step: 2, title: 'Find employee' },
-    { step: 3, title: 'Confirm & send' },
-  ],
-  UPDATE_EMPLOYEE_INFO: [
-    { step: 1, title: 'Request' },
-    { step: 2, title: 'Find employee' },
-    { step: 3, title: 'Update & save' },
-  ],
-};
+const STAGE_TITLES: { step: number; title: string }[] = [
+  { step: 1, title: 'Request' },
+  { step: 2, title: 'Details' },
+  { step: 3, title: 'Review & submit' },
+];
 
 interface Confirmation {
   requestCode?: string;
@@ -241,7 +224,7 @@ export default function RequestFormPage() {
     );
   }
 
-  const stages = STAGE_TITLES[values.requestType] ?? STAGE_TITLES[''];
+  const stages = STAGE_TITLES;
   const isFindEmployeeStage = stage === 2 && (values.requestType === 'LEAVING_COMPANY' || values.requestType === 'UPDATE_EMPLOYEE_INFO');
   const canAdvanceFromStage2 = values.requestType === 'NEW_HIRE' ? true : Boolean(selectedEmployee);
 
@@ -254,13 +237,12 @@ export default function RequestFormPage() {
               <span className="brand-mark" aria-hidden>AZ</span>
               <span>
                 <span className="brand-name">Access operations</span>
-                <span className="brand-subtitle">InsideMaps · HR to Zoho</span>
+                <span className="brand-subtitle">InsideMaps</span>
               </span>
             </div>
-            <span className="eyebrow" style={{ marginTop: 64 }}>&quot;&quot;</span>
             <h1>Send the right details once.</h1>
             <p>
-              This request gives the Auditor everything needed to review the employee&rsquo;s Zoho access.
+              This request gives the Auditor everything needed to review the employee&rsquo;s access.
             </p>
           </div>
           <div className="hr-form-rail-note">

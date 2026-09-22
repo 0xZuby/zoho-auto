@@ -52,12 +52,15 @@ function requireEmail(errors: FormFieldErrors, field: keyof OnboardingFormValues
 }
 
 export function validateStageOne(values: OnboardingFormValues, errors: FormFieldErrors = {}): FormFieldErrors {
-  requireEmail(errors, 'requesterEmail', values.requesterEmail, 'Enter the requester email.');
   if (!values.requestType) errors.requestType = 'Select a request type.';
   return errors;
 }
 
 export function validateStageTwo(values: OnboardingFormValues, catalog: FormCatalog, errors: FormFieldErrors = {}): FormFieldErrors {
+  if (values.requestType === 'NEW_HIRE') {
+    requireEmail(errors, 'requesterEmail', values.requesterEmail, 'Enter the requester email.');
+  }
+
   if (!values.nameAndSurname.trim()) errors.nameAndSurname = 'Enter the employee name and surname.';
   requireEmail(errors, 'privateEmail', values.privateEmail, "Enter the employee's private email address.");
 

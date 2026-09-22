@@ -9,9 +9,11 @@ interface StageTwoPlacementProps {
   errors: FormFieldErrors;
   catalog: FormCatalog;
   onChange: <K extends keyof OnboardingFormValues>(field: K, value: OnboardingFormValues[K]) => void;
+  /** Hidden when this form is reused for the "Update employee info" flow, where there is no separate requester step. */
+  showRequesterEmail?: boolean;
 }
 
-export function StageTwoPlacement({ values, errors, catalog, onChange }: StageTwoPlacementProps) {
+export function StageTwoPlacement({ values, errors, catalog, onChange, showRequesterEmail = true }: StageTwoPlacementProps) {
   return (
     <div className="stack gap-24">
       <div className="stack gap-4">
@@ -22,6 +24,19 @@ export function StageTwoPlacement({ values, errors, catalog, onChange }: StageTw
       <div className="notice notice-info">
         Placement details help route the request. An auditor reviews and approves the final Zoho role and groups separately.
       </div>
+
+      {showRequesterEmail && (
+        <TextField
+          label="HR requester email"
+          required
+          type="email"
+          value={values.requesterEmail}
+          error={errors.requesterEmail}
+          hint="We’ll keep this on the request record for follow-up."
+          placeholder="hr@company.com"
+          onChange={(value) => onChange('requesterEmail', value)}
+        />
+      )}
 
       <div className="form-grid">
         <TextField

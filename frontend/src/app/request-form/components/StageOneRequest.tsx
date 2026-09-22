@@ -1,7 +1,6 @@
 'use client';
 
 import type { FormCatalog, FormFieldErrors, OnboardingFormValues, RequestType } from '@/lib/types';
-import { TextField } from './TextField';
 
 interface StageOneRequestProps {
   values: OnboardingFormValues;
@@ -16,20 +15,9 @@ export function StageOneRequest({ values, errors, catalog, onChange }: StageOneR
       <div className="stack gap-4">
         <h2 style={{ fontSize: 19 }}>Request details</h2>
         <p className="text-muted text-sm">
-          Tell us what HR needs the Auditor to review.
+          What kind of request is this?
         </p>
       </div>
-
-      <TextField
-        label="HR requester email"
-        required
-        type="email"
-        value={values.requesterEmail}
-        error={errors.requesterEmail}
-        hint="We’ll keep this on the request record for follow-up."
-        placeholder="hr@company.com"
-        onChange={(value) => onChange('requesterEmail', value)}
-      />
 
       <div className="field">
         <span className="field-label">

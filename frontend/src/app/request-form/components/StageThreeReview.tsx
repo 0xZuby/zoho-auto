@@ -62,7 +62,7 @@ export function StageThreeReview({ values, errors, catalog, onChange, onEditStag
         </div>
 
         <dl className="definition-list">
-          <ReviewItem label="Requester email" value={values.requesterEmail} />
+          <ReviewItem label="Requester email" value={values.requesterEmail} onEdit={() => onEditStage(2)} />
           <ReviewItem label="Request type" value={REQUEST_TYPE_LABELS[values.requestType] ?? values.requestType} onEdit={() => onEditStage(1)} />
           <ReviewItem label="Name and surname" value={values.nameAndSurname} onEdit={() => onEditStage(2)} />
           <ReviewItem label="Private email" value={values.privateEmail} />

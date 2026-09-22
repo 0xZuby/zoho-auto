@@ -30,7 +30,7 @@ export function UpdateEmployeeStage({ values, errors, catalog, onChange }: Updat
         change in the audit log — there is no separate approval step for edits.
       </div>
 
-      <StageTwoPlacement values={values} errors={errors} catalog={catalog} onChange={onChange} />
+      <StageTwoPlacement values={values} errors={errors} catalog={catalog} onChange={onChange} showRequesterEmail={false} />
 
       {showGithubFields && (
         <div className="form-grid">
