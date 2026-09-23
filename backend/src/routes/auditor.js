@@ -5,6 +5,7 @@ import { ROLE } from '../domain/users.js';
 import { STATUS } from '../domain/statuses.js';
 import { badRequest, unprocessable } from '../lib/http-error.js';
 import { validateEmployeeInfoEdit, hasErrors } from '../domain/validation.js';
+import { ACCOUNT_TYPE, isAccountType } from '../domain/account-types.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,12 +42,17 @@ export function createAuditorRouter({ requestRepository, provisioningService, no
   router.put(
     '/requests/:id/account',
     asyncHandler(async (req, res) => {
-      const { corporateEmail, role, groups } = req.body ?? {};
+      const { corporateEmail, role, groups, accountType = ACCOUNT_TYPE.ZOHO } = req.body ?? {};
       const errors = {};
+      if (!isAccountType(accountType)) errors.accountType = 'Choose a valid account type.';
       if (!String(corporateEmail ?? '').trim()) errors.corporateEmail = 'Corporate email is required.';
       else if (!EMAIL_PATTERN.test(corporateEmail)) errors.corporateEmail = 'Enter a valid email address.';
-      if (!String(role ?? '').trim()) errors.role = 'Role is required.';
-      if (!Array.isArray(groups) || groups.length === 0) errors.groups = 'At least one group must be assigned.';
+      // Role/groups only apply to Zoho accounts — an InsideMaps account has
+      // neither, since the employee provisions it themselves.
+      if (accountType === ACCOUNT_TYPE.ZOHO) {
+        if (!String(role ?? '').trim()) errors.role = 'Role is required.';
+        if (!Array.isArray(groups) || groups.length === 0) errors.groups = 'At least one group must be assigned.';
+      }
       if (Object.keys(errors).length) throw unprocessable('Please correct the account configuration.', errors);
 
       const updated = await requestRepository.saveResolvedAccount(req.params.id, {
@@ -54,6 +60,7 @@ export function createAuditorRouter({ requestRepository, provisioningService, no
         corporateEmail,
         role,
         groups,
+        accountType,
       });
       res.json(updated);
     }),

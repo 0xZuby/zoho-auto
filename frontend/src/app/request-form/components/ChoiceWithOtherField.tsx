@@ -51,17 +51,19 @@ export function ChoiceWithOtherField({
         <option value="" disabled>
           Select {label.toLowerCase()}…
         </option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-        <option value={otherSentinel}>{otherSentinel}:</option>
+        {options.map((option) =>
+          option === otherSentinel ? null : (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ),
+        )}
+        <option value={otherSentinel}>{otherSentinel}</option>
       </select>
       {error && <span id={messageId} className="field-error">{error}</span>}
 
       {isOther && (
-        <div className="field" style={{ marginTop: 4 }}>
+        <div className="field choice-other-field">
           <input
             className={`input${otherError ? ' has-error' : ''}`}
             placeholder={`Enter ${label.toLowerCase()}`}

@@ -11,6 +11,8 @@ interface ConfirmProvisionDialogProps {
 }
 
 export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel, onConfirm, isSubmitting }: ConfirmProvisionDialogProps) {
+  const isInsideMaps = resolvedAccount.accountType === 'INSIDEMAPS';
+
   return (
     <div
       role="dialog"
@@ -35,8 +37,15 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
     >
       <div className="card card-padded stack gap-20" style={{ maxWidth: 420, width: '100%' }}>
         <h2 id="confirm-provision-title" style={{ fontSize: 18 }}>
-          Create Zoho user?
+          {isInsideMaps ? 'Request InsideMaps account?' : 'Create Zoho user?'}
         </h2>
+
+        {isInsideMaps && (
+          <p className="text-muted text-sm">
+            This records the request only — the employee still needs to sign up on the InsideMaps website with the
+            email below.
+          </p>
+        )}
 
         <dl className="definition-list" style={{ gridTemplateColumns: '1fr' }}>
           <div>
@@ -47,14 +56,18 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
             <dt>Email</dt>
             <dd>{resolvedAccount.corporateEmail}</dd>
           </div>
-          <div>
-            <dt>Role</dt>
-            <dd>{resolvedAccount.role}</dd>
-          </div>
-          <div>
-            <dt>Groups</dt>
-            <dd>{resolvedAccount.groups.join(', ')}</dd>
-          </div>
+          {!isInsideMaps && (
+            <>
+              <div>
+                <dt>Role</dt>
+                <dd>{resolvedAccount.role}</dd>
+              </div>
+              <div>
+                <dt>Groups</dt>
+                <dd>{resolvedAccount.groups.join(', ')}</dd>
+              </div>
+            </>
+          )}
         </dl>
 
         <div className="row-between">
@@ -62,7 +75,7 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
             Cancel
           </button>
           <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting ? 'Creating…' : 'Create user'}
+            {isSubmitting ? 'Creating…' : isInsideMaps ? 'Request account' : 'Create user'}
           </button>
         </div>
       </div>

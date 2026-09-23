@@ -21,10 +21,6 @@ export function StageTwoPlacement({ values, errors, catalog, onChange, showReque
         <p className="text-muted text-sm">Tell us who the request is for and where they sit in the organization.</p>
       </div>
 
-      <div className="notice notice-info">
-        Placement details help route the request. An auditor reviews and approves the final Zoho role and groups separately.
-      </div>
-
       {showRequesterEmail && (
         <TextField
           label="HR requester email"

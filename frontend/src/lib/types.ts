@@ -78,10 +78,13 @@ export interface RequestSummary {
   previousRequestId: string | null;
 }
 
+export type AccountType = 'ZOHO' | 'INSIDEMAPS';
+
 export interface ProposedAccount {
   corporateEmail: string;
   role: string;
   groups: string[];
+  accountType: AccountType;
   needsReview: boolean;
   reasons: string[];
 }
@@ -90,6 +93,7 @@ export interface ResolvedAccount {
   corporateEmail: string;
   role: string;
   groups: string[];
+  accountType: AccountType;
   resolvedBy: string | null;
   resolvedAt: string;
 }

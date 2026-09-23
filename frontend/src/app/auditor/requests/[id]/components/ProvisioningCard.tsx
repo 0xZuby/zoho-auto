@@ -19,6 +19,8 @@ const STEP_LABEL_FALLBACK: Record<string, string> = {
   assign_groups: 'Groups assigned',
   verify_configuration: 'Account configuration verified',
   deactivate_user: 'Zoho account deactivated',
+  request_insidemaps_access: 'InsideMaps account requested (employee signup pending)',
+  revoke_insidemaps_access: 'InsideMaps account access revoked',
 };
 
 export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) {
@@ -26,9 +28,11 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isInsideMaps = request.resolvedAccount?.accountType === 'INSIDEMAPS';
   const canCreate = request.status === 'APPROVED' && Boolean(request.resolvedAccount);
   const canRetry = request.status === 'PARTIALLY_PROVISIONED' || request.status === 'PROVISIONING_FAILED';
   const hasRun = request.provisioning.steps.length > 0;
+  const createLabel = isInsideMaps ? 'Request InsideMaps account' : 'Create Zoho user';
 
   async function handleProvision() {
     setIsSubmitting(true);
@@ -67,7 +71,7 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
         <h2 style={{ fontSize: 15 }}>Provisioning</h2>
         {canCreate && !hasRun && (
           <button type="button" className="btn btn-primary" onClick={() => setShowConfirm(true)}>
-            Create Zoho user
+            {createLabel}
           </button>
         )}
         {canRetry && (
@@ -77,7 +81,9 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
         )}
       </div>
       <p className="card-section-intro">
-        Each action is recorded separately so failed steps can be retried without creating a duplicate account.
+        {isInsideMaps
+          ? 'InsideMaps accounts aren\u2019t provisioned automatically yet \u2014 this records that access was requested.'
+          : 'Each action is recorded separately so failed steps can be retried without creating a duplicate account.'}
       </p>
 
       {error && <div className="notice notice-error">{error}</div>}

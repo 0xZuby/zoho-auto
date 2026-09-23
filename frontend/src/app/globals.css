@@ -626,6 +626,35 @@ input, select, textarea {
   background: var(--accent-soft);
 }
 
+.choice-other-field {
+  position: relative;
+  margin-top: 4px;
+  padding-left: 14px;
+}
+
+.choice-other-field::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 6px;
+  width: 6px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  border-bottom-left-radius: 6px;
+  opacity: 0.5;
+}
+
+.choice-other-field .input {
+  border-color: var(--border-strong);
+}
+
+.choice-other-field .input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

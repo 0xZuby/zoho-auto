@@ -1,4 +1,5 @@
 import { STATUS } from '../domain/statuses.js';
+import { ACCOUNT_TYPE } from '../domain/account-types.js';
 import { conflict } from '../lib/http-error.js';
 
 /**
@@ -16,13 +17,31 @@ import { conflict } from '../lib/http-error.js';
  * specially — if it already recorded success (a zohoUserId exists on the
  * request), it is SKIPPED rather than re-executed, so a retry can never
  * mint a second Zoho account for the same request.
+ *
+ * Account type (PRD follow-up): a resolved account is either a Zoho
+ * account (the flow above) or an InsideMaps account, where the employee
+ * signs up on the InsideMaps website themselves. There is no InsideMaps
+ * API yet, so that plan is a single step that just records the request —
+ * see `runStep`'s 'request_insidemaps_access' / 'revoke_insidemaps_access'
+ * cases, which are the only things that need to change once that API
+ * exists.
  */
 
-function buildStepPlan(requestType) {
+function buildStepPlan(requestType, accountType) {
   const base = [
     { name: 'validate_employee', label: 'Employee validated' },
     { name: 'check_email_availability', label: 'Email availability checked' },
   ];
+
+  if (accountType === ACCOUNT_TYPE.INSIDEMAPS) {
+    if (requestType === 'LEAVING_COMPANY') {
+      return [
+        { name: 'validate_employee', label: 'Employee validated' },
+        { name: 'revoke_insidemaps_access', label: 'InsideMaps account access revoked' },
+      ];
+    }
+    return [...base, { name: 'request_insidemaps_access', label: 'InsideMaps account requested (employee signup pending)' }];
+  }
 
   if (requestType === 'LEAVING_COMPANY') {
     return [
@@ -101,6 +120,14 @@ export function createProvisioningService({ requestRepository, zohoClient, check
         return zohoClient.verifyConfiguration({ resolvedAccount, zohoUserId: getZohoUserId(request) });
       case 'deactivate_user':
         return zohoClient.deactivateUser({ resolvedAccount, zohoUserId: getZohoUserId(request) });
+      // Placeholder steps for InsideMaps accounts: there is no InsideMaps
+      // signup/deprovisioning API to call yet, so these just record that
+      // access was requested/revoked. Replace the body of these two cases
+      // with real API calls once that integration exists.
+      case 'request_insidemaps_access':
+        return { accountType: ACCOUNT_TYPE.INSIDEMAPS };
+      case 'revoke_insidemaps_access':
+        return { accountType: ACCOUNT_TYPE.INSIDEMAPS };
       default:
         throw new Error(`Unknown provisioning step: ${step.name}`);
     }
@@ -120,14 +147,26 @@ export function createProvisioningService({ requestRepository, zohoClient, check
       throw conflict('An auditor must approve an account configuration before provisioning can start.');
     }
 
-    const plan = buildStepPlan(request.submission.requestType);
+    const plan = buildStepPlan(request.submission.requestType, request.resolvedAccount.accountType ?? ACCOUNT_TYPE.ZOHO);
     const startedAt = request.provisioning.startedAt ?? new Date().toISOString();
 
     request = await requestRepository.applyUpdate(requestId, (entry) => ({
       ...entry,
       status: STATUS.PROVISIONING,
       provisioning: { ...entry.provisioning, startedAt, failureReason: null },
-      auditTrail: [...entry.auditTrail, { at: new Date().toISOString(), actorId: null, actorType: 'SYSTEM', action: 'PROVISIONING_STARTED', detail: 'Zoho provisioning initiated.' }],
+      auditTrail: [
+        ...entry.auditTrail,
+        {
+          at: new Date().toISOString(),
+          actorId: null,
+          actorType: 'SYSTEM',
+          action: 'PROVISIONING_STARTED',
+          detail:
+            entry.resolvedAccount?.accountType === ACCOUNT_TYPE.INSIDEMAPS
+              ? 'InsideMaps account request initiated.'
+              : 'Zoho provisioning initiated.',
+        },
+      ],
     }));
 
     let failure = null;

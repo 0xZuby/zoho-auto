@@ -5,6 +5,7 @@ import { proposeAccountConfiguration } from '../config/rules.js';
 import { proposeCorporateEmail } from './corporate-email.js';
 import { isDevelopmentDepartment } from '../config/catalog.js';
 import { notFound, conflict } from '../lib/http-error.js';
+import { ACCOUNT_TYPE } from './account-types.js';
 
 /**
  * Onboarding request repository.
@@ -82,6 +83,7 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
         corporateEmail: options.accountOverride.corporateEmail,
         role: options.accountOverride.role,
         groups: options.accountOverride.groups,
+        accountType: options.accountOverride.accountType ?? ACCOUNT_TYPE.ZOHO,
         needsReview: false,
         reasons: [],
       };
@@ -97,6 +99,10 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
         corporateEmail: proposeCorporateEmail(submission.nameAndSurname, corporateEmailDomain, existingEmails),
         role: proposal.role,
         groups: proposal.groups,
+        // The rules engine only proposes a Zoho role/groups; account type
+        // (Zoho vs InsideMaps) is always an explicit auditor choice, never
+        // inferred from the submission.
+        accountType: ACCOUNT_TYPE.ZOHO,
         needsReview: proposal.needsReview,
         reasons: proposal.reasons,
       };
@@ -270,19 +276,30 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
    * submission; it is always either copied verbatim (with acknowledgement)
    * or edited by the reviewing auditor.
    */
-  async function saveResolvedAccount(id, { actorId, corporateEmail, role, groups }) {
+  async function saveResolvedAccount(id, { actorId, corporateEmail, role, groups, accountType }) {
     const document = await getById(id);
     if (document.status !== STATUS.PENDING_REVIEW && document.status !== STATUS.APPROVED) {
       throw conflict(`Cannot edit account configuration while request is ${document.status}.`);
     }
 
+    const resolvedAccountType = accountType ?? ACCOUNT_TYPE.ZOHO;
+    const isZoho = resolvedAccountType === ACCOUNT_TYPE.ZOHO;
+
     const resolvedAccount = {
       corporateEmail: String(corporateEmail).trim(),
-      role: String(role).trim(),
-      groups: Array.isArray(groups) ? groups.map((group) => String(group).trim()).filter(Boolean) : [],
+      // Role/groups are Zoho-specific; an InsideMaps account has neither,
+      // so they're stored empty rather than carrying over a stale Zoho
+      // proposal the auditor never reviewed for this account type.
+      role: isZoho ? String(role ?? '').trim() : '',
+      groups: isZoho && Array.isArray(groups) ? groups.map((group) => String(group).trim()).filter(Boolean) : [],
+      accountType: resolvedAccountType,
       resolvedBy: actorId,
       resolvedAt: new Date().toISOString(),
     };
+
+    const detail = isZoho
+      ? `Account configuration approved: ${resolvedAccount.corporateEmail} / ${resolvedAccount.role} / [${resolvedAccount.groups.join(', ')}]`
+      : `Account configuration approved: ${resolvedAccount.corporateEmail} / InsideMaps account (employee signs up on the InsideMaps website)`;
 
     const nowIso = new Date().toISOString();
     const updated = await collection.updateOne(
@@ -300,7 +317,7 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
             actorId,
             actorType: 'AUDITOR',
             action: 'ACCOUNT_CONFIGURATION_APPROVED',
-            detail: `Account configuration approved: ${resolvedAccount.corporateEmail} / ${resolvedAccount.role} / [${resolvedAccount.groups.join(', ')}]`,
+            detail,
           },
         ],
       }),
@@ -451,7 +468,7 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
         actorType,
         action: 'OFFBOARDING_INITIATED',
         initialAuditDetail: `Offboarding initiated by ${initiatedBy} from onboarding request ${source.requestCode}.`,
-        accountOverride: { corporateEmail: account.corporateEmail, role: account.role, groups: account.groups },
+        accountOverride: { corporateEmail: account.corporateEmail, role: account.role, groups: account.groups, accountType: account.accountType },
         previousRequestId: source.id,
       },
     );

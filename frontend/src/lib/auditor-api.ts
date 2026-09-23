@@ -1,5 +1,5 @@
 import { apiRequest } from './api-client';
-import type { DashboardMetrics, OnboardingRequest, RequestSummary } from './types';
+import type { AccountType, DashboardMetrics, OnboardingRequest, RequestSummary } from './types';
 
 export function getMetrics(): Promise<DashboardMetrics> {
   return apiRequest('/auditor/metrics');
@@ -17,6 +17,7 @@ export interface SaveAccountInput {
   corporateEmail: string;
   role: string;
   groups: string[];
+  accountType: AccountType;
 }
 
 export function saveResolvedAccount(id: string, input: SaveAccountInput): Promise<OnboardingRequest> {
