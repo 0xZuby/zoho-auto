@@ -35,8 +35,8 @@ export function ConfirmOffboardDialog({ employeeName, onCancel, onConfirm, isSub
           Offboard {employeeName}?
         </h2>
         <p className="text-muted text-sm">
-          This creates a new leaving-company request for {employeeName}, targeting their existing Zoho account.
-          You&rsquo;ll review and confirm the account deactivation on that request, same as any other request.
+          This immediately disables {employeeName}&rsquo;s Zoho Mail account and revokes their InsideMaps access.
+          There&rsquo;s no separate review step — it takes effect as soon as you confirm.
         </p>
 
         <div className="row-between">
@@ -44,7 +44,7 @@ export function ConfirmOffboardDialog({ employeeName, onCancel, onConfirm, isSub
             Cancel
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting ? 'Starting…' : 'Start offboarding'}
+            {isSubmitting ? 'Offboarding…' : 'Offboard'}
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { apiRequest } from './api-client';
-import type { AccountType, DashboardMetrics, OnboardingRequest, RequestSummary } from './types';
+import type { AccountType, DashboardMetrics, EmployeeDirectoryEntry, OnboardingRequest, RequestSummary } from './types';
 
 export function getMetrics(): Promise<DashboardMetrics> {
   return apiRequest('/auditor/metrics');
@@ -48,6 +48,11 @@ export function updateEmployeeSubmission(id: string, input: UpdateSubmissionInpu
 
 export function offboardEmployee(id: string): Promise<OnboardingRequest> {
   return apiRequest(`/auditor/requests/${id}/offboard`, { method: 'POST' });
+}
+
+/** Finds current employees (not already leaving/left) by work or personal email, for the "Offboard by email" quick action. */
+export function searchEmployees(query: string): Promise<EmployeeDirectoryEntry[]> {
+  return apiRequest(`/auditor/employees?query=${encodeURIComponent(query)}`);
 }
 
 export function rejectRequest(id: string, reason?: string): Promise<OnboardingRequest> {

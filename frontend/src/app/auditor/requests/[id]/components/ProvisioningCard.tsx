@@ -29,10 +29,11 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
   const [error, setError] = useState<string | null>(null);
 
   const isInsideMaps = request.resolvedAccount?.accountType === 'INSIDEMAPS';
+  const isLeavingCompany = request.submission.requestType === 'LEAVING_COMPANY';
   const canCreate = request.status === 'APPROVED' && Boolean(request.resolvedAccount);
   const canRetry = request.status === 'PARTIALLY_PROVISIONED' || request.status === 'PROVISIONING_FAILED';
   const hasRun = request.provisioning.steps.length > 0;
-  const createLabel = isInsideMaps ? 'Request InsideMaps account' : 'Create Zoho user';
+  const createLabel = isLeavingCompany ? 'Disable access' : isInsideMaps ? 'Request InsideMaps account' : 'Create Zoho user';
 
   async function handleProvision() {
     setIsSubmitting(true);
@@ -81,9 +82,11 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
         )}
       </div>
       <p className="card-section-intro">
-        {isInsideMaps
-          ? 'InsideMaps accounts aren\u2019t provisioned automatically yet \u2014 this records that access was requested.'
-          : 'Each action is recorded separately so failed steps can be retried without creating a duplicate account.'}
+        {isLeavingCompany
+          ? 'Offboarding disables Zoho Mail and revokes InsideMaps access in one step \u2014 both are attempted regardless of the account type this employee had.'
+          : isInsideMaps
+            ? 'InsideMaps accounts aren\u2019t provisioned automatically yet \u2014 this records that access was requested.'
+            : 'Each action is recorded separately so failed steps can be retried without creating a duplicate account.'}
       </p>
 
       {error && <div className="notice notice-error">{error}</div>}

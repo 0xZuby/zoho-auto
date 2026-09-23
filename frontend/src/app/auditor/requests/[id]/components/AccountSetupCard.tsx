@@ -30,6 +30,7 @@ const ACCOUNT_TYPE_OPTIONS: Array<{ value: AccountType; title: string; descripti
  * the resolved account before "Create Zoho user" becomes available.
  */
 export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
+  const isLeavingCompany = request.submission.requestType === 'LEAVING_COMPANY';
   const isLocked = request.status !== 'PENDING_REVIEW' && request.status !== 'APPROVED';
   const initial = request.resolvedAccount ?? request.proposedAccount;
 
@@ -71,10 +72,25 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
     <section className="card card-padded detail-card stack gap-16">
       <div className="row-between">
         <h2 style={{ fontSize: 15 }}>Account details</h2>
-        {request.proposedAccount.needsReview && (
-          <span className="chip chip-warning">Rules engine flagged for review</span>
-        )}
       </div>
+
+      {isLeavingCompany ? (
+        <>
+          <p className="card-section-intro">
+            Offboarding disables both access points in one step — there&apos;s nothing to choose or approve here.
+          </p>
+          <div className="notice notice-info stack gap-4">
+            <span>
+              <strong>Work email:</strong> {initial.corporateEmail || request.submission.privateEmail}
+            </span>
+            <span>Zoho Mail access is disabled and InsideMaps access is revoked, regardless of the account type this employee had.</span>
+          </div>
+        </>
+      ) : (
+        <>
+      {request.proposedAccount.needsReview && (
+        <span className="chip chip-warning" style={{ alignSelf: 'flex-start' }}>Rules engine flagged for review</span>
+      )}
       <p className="card-section-intro">
         Choose how this employee gets access, review the configuration, then save it before any provisioning action can run.
       </p>
@@ -185,6 +201,8 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
         <button type="button" className="btn btn-primary" onClick={handleSave} disabled={isSaving} style={{ alignSelf: 'flex-start' }}>
           {isSaving ? 'Saving…' : isApproved ? 'Update account configuration' : 'Approve account configuration'}
         </button>
+      )}
+        </>
       )}
     </section>
   );

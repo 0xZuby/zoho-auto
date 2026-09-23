@@ -25,30 +25,31 @@ import { conflict } from '../lib/http-error.js';
  * see `runStep`'s 'request_insidemaps_access' / 'revoke_insidemaps_access'
  * cases, which are the only things that need to change once that API
  * exists.
+ *
+ * Offboarding (LEAVING_COMPANY) is the one exception to the account-type
+ * branching above: an auditor offboarding an employee doesn't choose an
+ * account type, because pressing "Offboard" always disables BOTH possible
+ * access paths in one action — the employee's Zoho Mail account is
+ * deactivated AND their InsideMaps access is revoked, regardless of which
+ * one (or both) they actually had.
  */
 
 function buildStepPlan(requestType, accountType) {
+  if (requestType === 'LEAVING_COMPANY') {
+    return [
+      { name: 'validate_employee', label: 'Employee validated' },
+      { name: 'deactivate_user', label: 'Zoho Mail access disabled' },
+      { name: 'revoke_insidemaps_access', label: 'InsideMaps access revoked' },
+    ];
+  }
+
   const base = [
     { name: 'validate_employee', label: 'Employee validated' },
     { name: 'check_email_availability', label: 'Email availability checked' },
   ];
 
   if (accountType === ACCOUNT_TYPE.INSIDEMAPS) {
-    if (requestType === 'LEAVING_COMPANY') {
-      return [
-        { name: 'validate_employee', label: 'Employee validated' },
-        { name: 'revoke_insidemaps_access', label: 'InsideMaps account access revoked' },
-      ];
-    }
     return [...base, { name: 'request_insidemaps_access', label: 'InsideMaps account requested (employee signup pending)' }];
-  }
-
-  if (requestType === 'LEAVING_COMPANY') {
-    return [
-      ...base,
-      { name: 'deactivate_user', label: 'Zoho account deactivated' },
-      { name: 'verify_configuration', label: 'Deactivation verified' },
-    ];
   }
 
   // NEW_HIRE and UPDATE_EMPLOYEE_INFO both provision/refresh a full account.
@@ -56,7 +57,6 @@ function buildStepPlan(requestType, accountType) {
     ...base,
     { name: 'create_user', label: 'Zoho user created' },
     { name: 'enable_mail', label: 'Zoho Mail enabled' },
-    ...(requestType === 'UPDATE_EMPLOYEE_INFO' ? [] : []),
     { name: 'assign_groups', label: 'Groups assigned' },
     { name: 'verify_configuration', label: 'Account configuration verified' },
   ];
@@ -68,6 +68,15 @@ function findStepResult(request, stepName) {
 
 function stepSucceeded(request, stepName) {
   return findStepResult(request, stepName)?.outcome === 'SUCCESS';
+}
+
+function describeProvisioningStart(request) {
+  if (request.submission.requestType === 'LEAVING_COMPANY') {
+    return 'Offboarding started: disabling Zoho Mail and revoking InsideMaps access.';
+  }
+  return request.resolvedAccount?.accountType === ACCOUNT_TYPE.INSIDEMAPS
+    ? 'InsideMaps account request initiated.'
+    : 'Zoho provisioning initiated.';
 }
 
 export function createProvisioningService({ requestRepository, zohoClient, checkEmailAvailability }) {
@@ -102,13 +111,14 @@ export function createProvisioningService({ requestRepository, zohoClient, check
         return zohoClient.createUser({ resolvedAccount, employeeName: submission.nameAndSurname, submission });
       }
       case 'enable_mail':
-        return zohoClient.enableMail({ resolvedAccount, zohoUserId: getZohoUserId(request) });
+        return zohoClient.enableMail({ resolvedAccount, zohoUserId: await getZohoUserId(request) });
       case 'assign_groups': {
         const alreadyAssigned = new Set(findStepResult(request, 'assign_groups')?.output?.assignedGroups ?? []);
         const assignedGroups = [...alreadyAssigned];
+        const zohoUserId = await getZohoUserId(request);
         for (const group of resolvedAccount.groups) {
           if (alreadyAssigned.has(group)) continue;
-          await zohoClient.assignGroup({ resolvedAccount, zohoUserId: getZohoUserId(request), group });
+          await zohoClient.assignGroup({ resolvedAccount, zohoUserId, group });
           assignedGroups.push(group);
           // Persist progress after each individual group so a failure on
           // group 3 of 4 does not force groups 1-2 to be reassigned.
@@ -117,9 +127,9 @@ export function createProvisioningService({ requestRepository, zohoClient, check
         return { assignedGroups };
       }
       case 'verify_configuration':
-        return zohoClient.verifyConfiguration({ resolvedAccount, zohoUserId: getZohoUserId(request) });
+        return zohoClient.verifyConfiguration({ resolvedAccount, zohoUserId: await getZohoUserId(request) });
       case 'deactivate_user':
-        return zohoClient.deactivateUser({ resolvedAccount, zohoUserId: getZohoUserId(request) });
+        return zohoClient.deactivateUser({ resolvedAccount, zohoUserId: await getZohoUserId(request) });
       // Placeholder steps for InsideMaps accounts: there is no InsideMaps
       // signup/deprovisioning API to call yet, so these just record that
       // access was requested/revoked. Replace the body of these two cases
@@ -133,8 +143,22 @@ export function createProvisioningService({ requestRepository, zohoClient, check
     }
   }
 
-  function getZohoUserId(request) {
-    return findStepResult(request, 'create_user')?.output?.zohoUserId;
+  /**
+   * The Zoho user id lives on whichever request in this employee's chain
+   * actually ran `create_user` — usually their original onboarding
+   * request, not the offboarding request created later to deactivate them
+   * (which starts with an empty `provisioning.steps`). Walk backwards
+   * through `previousRequestId` until it's found.
+   */
+  async function getZohoUserId(request) {
+    let current = request;
+    while (current) {
+      const zohoUserId = findStepResult(current, 'create_user')?.output?.zohoUserId;
+      if (zohoUserId) return zohoUserId;
+      if (!current.previousRequestId) return undefined;
+      current = await requestRepository.getById(current.previousRequestId);
+    }
+    return undefined;
   }
 
   async function run(requestId) {
@@ -161,10 +185,7 @@ export function createProvisioningService({ requestRepository, zohoClient, check
           actorId: null,
           actorType: 'SYSTEM',
           action: 'PROVISIONING_STARTED',
-          detail:
-            entry.resolvedAccount?.accountType === ACCOUNT_TYPE.INSIDEMAPS
-              ? 'InsideMaps account request initiated.'
-              : 'Zoho provisioning initiated.',
+          detail: describeProvisioningStart(entry),
         },
       ],
     }));

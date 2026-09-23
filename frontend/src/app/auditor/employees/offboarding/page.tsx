@@ -5,6 +5,7 @@ import { listRequests } from '@/lib/auditor-api';
 import type { RequestSummary } from '@/lib/types';
 import { RequestQueueTable } from '../../components/RequestQueueTable';
 import { Placeholder } from '../../components/Placeholder';
+import { StartOffboardingCard } from './components/StartOffboardingCard';
 
 export default function OffboardingRequestsPage() {
   const [requests, setRequests] = useState<RequestSummary[] | null>(null);
@@ -29,17 +30,19 @@ export default function OffboardingRequestsPage() {
       <div className="ops-intro">
         <div>
           <h1>Offboarding</h1>
-          <p>People leaving the company whose Zoho access still needs to be wound down.</p>
+          <p>Search for someone leaving the company to disable their Zoho Mail and InsideMaps access instantly.</p>
         </div>
       </div>
+
+      <StartOffboardingCard />
 
       {loadError && <div className="notice notice-error">{loadError}</div>}
 
       {requests ? (
         <RequestQueueTable
           requests={requests}
-          title="Leaving company requests"
-          emptyMessage="No offboarding requests right now."
+          title="Offboarding history"
+          emptyMessage="No one has been offboarded yet."
         />
       ) : (
         <Placeholder height={300} label="Loading queue" />

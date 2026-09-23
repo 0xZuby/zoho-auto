@@ -80,6 +80,18 @@ export function createAuditorRouter({ requestRepository, provisioningService, no
     }),
   );
 
+  // Lets an auditor find an existing employee by work/personal email to
+  // start offboarding without first opening their request page. Excludes
+  // employees who are already leaving/left, and anyone with no recorded
+  // corporate account (nothing to offboard).
+  router.get(
+    '/employees',
+    asyncHandler(async (req, res) => {
+      const results = await requestRepository.searchEmployeeDirectory(req.query.query);
+      res.json(results.filter((entry) => entry.requestType !== 'LEAVING_COMPANY' && entry.corporateEmail));
+    }),
+  );
+
   router.post(
     '/requests/:id/offboard',
     asyncHandler(async (req, res) => {
@@ -87,7 +99,11 @@ export function createAuditorRouter({ requestRepository, provisioningService, no
         actorId: req.user.id,
         actorEmail: req.user.email,
       });
-      res.status(201).json(created);
+      // One-click offboarding: disable Zoho Mail and revoke InsideMaps
+      // access immediately, rather than waiting for a separate approve
+      // step, since there's no account configuration left to review.
+      const { request } = await provisioningService.run(created.id);
+      res.status(201).json(request);
     }),
   );
 

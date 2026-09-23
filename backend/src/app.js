@@ -54,7 +54,7 @@ export async function createApp(config) {
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-  app.use('/api/form', createFormRouter({ requestRepository }));
+  app.use('/api/form', createFormRouter({ requestRepository, provisioningService }));
   app.use('/api/auth', createAuthRouter({ userRepository, sessionManager, isProduction: config.isProduction }));
   app.use('/api/auditor', createAuditorRouter({ requestRepository, provisioningService, notificationService }));
   app.use('/api/admin', createAdminRouter({ userRepository, zohoConfig: config }));

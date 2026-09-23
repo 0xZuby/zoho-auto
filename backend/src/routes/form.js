@@ -11,7 +11,7 @@ import { ROLE } from '../domain/users.js';
  * company, Update employee info). HR must sign in first; every route here
  * requires an HR or Administrator session.
  */
-export function createFormRouter({ requestRepository }) {
+export function createFormRouter({ requestRepository, provisioningService }) {
   const router = Router();
   router.use(requireRole(ROLE.HR, ROLE.ADMINISTRATOR));
 
@@ -74,8 +74,10 @@ export function createFormRouter({ requestRepository }) {
     }),
   );
 
-  // HR selects an existing employee to offboard; this sends the request to
-  // the auditor queue for review, same as an auditor-initiated offboarding.
+  // HR selects an existing employee to offboard; this immediately disables
+  // both Zoho Mail and InsideMaps access for them (same one-click action
+  // an auditor can trigger from the auditor portal), then routes the
+  // resulting request to the auditor queue for visibility.
   router.post(
     '/employees/:id/offboard',
     asyncHandler(async (req, res) => {
@@ -85,7 +87,8 @@ export function createFormRouter({ requestRepository }) {
         actorType: 'HR',
         actorLabel: req.user.name,
       });
-      res.status(201).json({ requestCode: created.requestCode, submittedAt: created.submittedAt });
+      const { request } = await provisioningService.run(created.id);
+      res.status(201).json({ requestCode: request.requestCode, submittedAt: request.submittedAt });
     }),
   );
 

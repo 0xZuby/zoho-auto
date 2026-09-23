@@ -437,6 +437,13 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
    * "Leaving company" form. Creates a fresh LEAVING_COMPANY request that
    * targets the employee's existing Zoho account (never a newly generated
    * email), and cross-links both records in their audit trails.
+   *
+   * Offboarding is a one-click action: there is no separate "choose an
+   * account type / role / groups, then approve" review step the way
+   * onboarding has. The employee's existing account is auto-resolved
+   * immediately (see `saveResolvedAccount` call below) so the caller can
+   * turn around and run provisioning right away — pressing "Offboard"
+   * disables Zoho Mail and InsideMaps access in one action.
    */
   async function initiateOffboarding(sourceId, { actorId, actorEmail, actorType = 'AUDITOR', actorLabel }) {
     const source = await getById(sourceId);
@@ -480,7 +487,18 @@ export function createRequestRepository(store, { corporateEmailDomain }) {
       detail: `Offboarding request ${offboardingRequest.requestCode} was created for this employee${actorLabel ? ` by ${actorLabel}` : ''}.`,
     });
 
-    return offboardingRequest;
+    // Auto-resolve the account immediately (no manual review step): the
+    // employee's existing account details are carried over verbatim via
+    // `accountOverride` above, and offboarding always disables both
+    // possible access paths regardless of account type, so there's
+    // nothing left for an auditor to choose here.
+    return saveResolvedAccount(offboardingRequest.id, {
+      actorId,
+      corporateEmail: account.corporateEmail,
+      role: account.role,
+      groups: account.groups,
+      accountType: account.accountType,
+    });
   }
 
   return {
