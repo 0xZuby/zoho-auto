@@ -32,15 +32,6 @@ export default function HomePage() {
               </Link>
             </div>
           </section>
-
-          <aside className="portal-landing-panel" aria-label="Workflow summary">
-            <span className="panel-label">How it moves</span>
-            <ol className="portal-flow">
-              <li><span>01</span><div><strong>HR submits</strong><small>Employee and placement details</small></div></li>
-              <li><span>02</span><div><strong>Auditor reviews</strong><small>Final account and access decision</small></div></li>
-              <li><span>03</span><div><strong>Zoho provisions</strong><small>Account creation and notification</small></div></li>
-            </ol>
-          </aside>
         </div>
       </div>
     </main>

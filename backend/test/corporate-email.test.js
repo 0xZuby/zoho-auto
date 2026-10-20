@@ -32,19 +32,19 @@ describe('proposeCorporateEmail', () => {
     assert.equal(email, 'new.employee@insidemaps.com');
   });
 
-  test('appends a numeric suffix on collision with an existing email', () => {
+  test('appends a numeric suffix starting at 2 on collision with an existing email (Epic 2)', () => {
     const email = proposeCorporateEmail('Jane Doe', 'insidemaps.com', ['jane.doe@insidemaps.com']);
-    assert.equal(email, 'jane.doe1@insidemaps.com');
+    assert.equal(email, 'jane.doe2@insidemaps.com');
   });
 
   test('keeps incrementing the suffix until a free address is found', () => {
-    const existing = ['jane.doe@insidemaps.com', 'jane.doe1@insidemaps.com', 'jane.doe2@insidemaps.com'];
+    const existing = ['jane.doe@insidemaps.com', 'jane.doe2@insidemaps.com', 'jane.doe3@insidemaps.com'];
     const email = proposeCorporateEmail('Jane Doe', 'insidemaps.com', existing);
-    assert.equal(email, 'jane.doe3@insidemaps.com');
+    assert.equal(email, 'jane.doe4@insidemaps.com');
   });
 
   test('collision checks are case-insensitive', () => {
     const email = proposeCorporateEmail('Jane Doe', 'insidemaps.com', ['JANE.DOE@insidemaps.com']);
-    assert.equal(email, 'jane.doe1@insidemaps.com');
+    assert.equal(email, 'jane.doe2@insidemaps.com');
   });
 });

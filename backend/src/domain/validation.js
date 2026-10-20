@@ -10,6 +10,7 @@ import {
 } from '../config/catalog.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const REQUEST_TYPE_VALUES = new Set(REQUEST_TYPES.map((option) => option.value));
 
 /**
@@ -24,7 +25,8 @@ const REQUEST_TYPE_VALUES = new Set(REQUEST_TYPES.map((option) => option.value))
  *   requesterEmail, requestType
  * Stage 2 - Employee & placement
  *   nameAndSurname, privateEmail, country(+other), department(+other),
- *   team(+other), subTeam(+other), jobPosition(+other), managerEmail
+ *   team(+other), subTeam(+other), jobPosition(+other), managerEmail,
+ *   startDate (required only for a New hire submission)
  * Stage 3 - Developer access (conditional) + review
  *   githubProfile, githubRepositories (required only when department is a
  *   development department; always optional otherwise)
@@ -46,6 +48,16 @@ function requireEmail(errors, field, value, message) {
   }
   if (!EMAIL_PATTERN.test(value_)) {
     errors[field] = 'Enter a valid email address.';
+  }
+}
+
+/** Validates an optional `YYYY-MM-DD` date string, e.g. `startDate`. Only
+ * flags a bad format — callers that need the field to be present use
+ * `requireField` first. */
+function requireValidDateFormat(errors, field, value, message) {
+  const value_ = trimmed(value);
+  if (value_ && !DATE_PATTERN.test(value_)) {
+    errors[field] = message;
   }
 }
 
@@ -88,6 +100,7 @@ export function validateEmployeeInfoEdit(input = {}) {
   requireChoice(errors, 'jobPosition', input.jobPosition, 'jobPositionOther', input.jobPositionOther, JOB_POSITIONS, 'Job position');
 
   requireEmail(errors, 'managerEmail', input.managerEmail, 'Enter the Team Lead / Manager email.');
+  requireValidDateFormat(errors, 'startDate', input.startDate, 'Enter a valid date.');
 
   const resolvedDepartment = resolveChoiceValue(input.department, input.departmentOther);
   if (isDevelopmentDepartment(resolvedDepartment)) {
@@ -107,7 +120,17 @@ export function validateOnboardingSubmission(input = {}) {
     errors.requestType = 'Select a request type.';
   }
 
-  return { ...errors, ...validateEmployeeInfoEdit(input) };
+  const merged = { ...errors, ...validateEmployeeInfoEdit(input) };
+
+  // Start date only exists to let the queue sort by urgency and flag
+  // requests close to the employee's first day (PRD section 5/8), so it's
+  // only required on the initial New hire submission, not on later edits
+  // to Leaving company / Update employee info records.
+  if (trimmed(input.requestType) === 'NEW_HIRE') {
+    requireField(merged, 'startDate', input.startDate, "Enter the employee's start date.");
+  }
+
+  return merged;
 }
 
 export function hasErrors(errors) {

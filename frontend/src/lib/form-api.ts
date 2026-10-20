@@ -1,5 +1,11 @@
 import { apiRequest } from './api-client';
-import type { EmployeeDirectoryEntry, EmployeeSubmissionRecord, FormCatalog, OnboardingFormValues } from './types';
+import type {
+  EmployeeDirectoryEntry,
+  EmployeeSubmissionRecord,
+  FormCatalog,
+  HrRequestSummary,
+  OnboardingFormValues,
+} from './types';
 
 export function getFormCatalog(): Promise<FormCatalog> {
   return apiRequest<FormCatalog>('/form/catalog');
@@ -7,6 +13,10 @@ export function getFormCatalog(): Promise<FormCatalog> {
 
 export function submitOnboardingForm(values: OnboardingFormValues): Promise<{ requestCode: string; submittedAt: string }> {
   return apiRequest('/form/submit', { method: 'POST', body: values });
+}
+
+export function listMyHrRequests(): Promise<HrRequestSummary[]> {
+  return apiRequest('/form/my-requests');
 }
 
 /** Employee directory search (HR finds an existing employee by private or work email to start an offboarding or an information update). */
@@ -34,14 +44,18 @@ export type UpdateEmployeeInput = Pick<
   | 'jobPosition'
   | 'jobPositionOther'
   | 'managerEmail'
+  | 'startDate'
   | 'githubProfile'
   | 'githubRepositories'
->;
+> & { resubmit?: boolean };
 
 export function updateEmployeeInfo(id: string, input: UpdateEmployeeInput): Promise<EmployeeSubmissionRecord> {
   return apiRequest(`/form/employees/${id}`, { method: 'PUT', body: input });
 }
 
-export function offboardEmployee(id: string): Promise<{ requestCode: string; submittedAt: string }> {
-  return apiRequest(`/form/employees/${id}/offboard`, { method: 'POST' });
+export function offboardEmployee(
+  id: string,
+  options: { effectiveLeaveDate?: string; effectiveLeaveTimezone?: string; leavingReason?: string } = {},
+): Promise<{ requestCode: string; submittedAt: string; scheduledFor?: string; status?: string }> {
+  return apiRequest(`/form/employees/${id}/offboard`, { method: 'POST', body: options });
 }

@@ -112,3 +112,33 @@ export function FlagIcon({ size = 9 }: IconProps) {
     </svg>
   );
 }
+
+export function AlertIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 2.2 14.2 13H1.8L8 2.2Z" />
+      <path d="M8 6.3v3.2" />
+      <path d="M8 11.4h.01" />
+    </Svg>
+  );
+}
+
+export function SlidersIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+      <circle cx="5.5" cy="4.5" r="1.4" fill="var(--bg, #fff)" />
+      <circle cx="10.5" cy="8" r="1.4" fill="var(--bg, #fff)" />
+      <circle cx="7" cy="11.5" r="1.4" fill="var(--bg, #fff)" />
+    </Svg>
+  );
+}
+
+export function AuditIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="2.2" width="10" height="11.6" rx="1.2" />
+      <path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" />
+    </Svg>
+  );
+}

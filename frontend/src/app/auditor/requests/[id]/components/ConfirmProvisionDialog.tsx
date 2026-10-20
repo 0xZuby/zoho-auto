@@ -11,7 +11,13 @@ interface ConfirmProvisionDialogProps {
 }
 
 export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel, onConfirm, isSubmitting }: ConfirmProvisionDialogProps) {
-  const isInsideMaps = resolvedAccount.accountType === 'INSIDEMAPS';
+  const includesZoho = resolvedAccount.accountType !== 'INSIDEMAPS';
+  const includesInsideMaps = resolvedAccount.accountType !== 'ZOHO';
+  const title = includesZoho
+    ? includesInsideMaps
+      ? 'Create Zoho Mail + InsideMaps?'
+      : 'Create Zoho Mail account?'
+    : 'Create InsideMaps account?';
 
   return (
     <div
@@ -37,13 +43,13 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
     >
       <div className="card card-padded stack gap-20" style={{ maxWidth: 420, width: '100%' }}>
         <h2 id="confirm-provision-title" style={{ fontSize: 18 }}>
-          {isInsideMaps ? 'Request InsideMaps account?' : 'Create Zoho user?'}
+          {title}
         </h2>
 
-        {isInsideMaps && (
+        {includesZoho && (
           <p className="text-muted text-sm">
-            This records the request only — the employee still needs to sign up on the InsideMaps website with the
-            email below.
+            The mailbox is created immediately (no invitation). A temporary password is emailed to the employee&apos;s
+            private address.
           </p>
         )}
 
@@ -56,17 +62,11 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
             <dt>Email</dt>
             <dd>{resolvedAccount.corporateEmail}</dd>
           </div>
-          {!isInsideMaps && (
-            <>
-              <div>
-                <dt>Role</dt>
-                <dd>{resolvedAccount.role}</dd>
-              </div>
-              <div>
-                <dt>Groups</dt>
-                <dd>{resolvedAccount.groups.join(', ')}</dd>
-              </div>
-            </>
+          {includesInsideMaps && (
+            <div>
+              <dt>InsideMaps roles</dt>
+              <dd>{(resolvedAccount.insideMapsRoles ?? []).join(', ') || '—'}</dd>
+            </div>
           )}
         </dl>
 
@@ -75,7 +75,7 @@ export function ConfirmProvisionDialog({ employeeName, resolvedAccount, onCancel
             Cancel
           </button>
           <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting ? 'Creating…' : isInsideMaps ? 'Request account' : 'Create user'}
+            {isSubmitting ? 'Creating…' : 'Create'}
           </button>
         </div>
       </div>

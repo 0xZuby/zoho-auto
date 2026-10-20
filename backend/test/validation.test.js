@@ -15,6 +15,7 @@ function validSubmission(overrides = {}) {
     subTeam: 'Product',
     jobPosition: 'Operator',
     managerEmail: 'manager@insidemaps.com',
+    startDate: '2026-10-01',
     ...overrides,
   };
 }

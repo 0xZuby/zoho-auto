@@ -16,6 +16,7 @@ function baseSubmission(overrides = {}) {
     subTeam: 'Product',
     jobPosition: 'Chief Astronaut', // deliberately unmapped -> needsReview
     managerEmail: 'manager@insidemaps.com',
+    startDate: '2026-10-01',
     ...overrides,
   };
 }

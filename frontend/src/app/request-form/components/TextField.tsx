@@ -5,7 +5,7 @@ import type { ChangeEvent } from 'react';
 interface TextFieldProps {
   label: string;
   required?: boolean;
-  type?: 'text' | 'email';
+  type?: 'text' | 'email' | 'date';
   value: string;
   error?: string;
   hint?: string;

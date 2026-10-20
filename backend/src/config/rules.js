@@ -15,9 +15,11 @@
  * account is created, and the auditor may override any of these values.
  */
 
+import { ACCOUNT_TYPE } from '../domain/account-types.js';
+
 const BASE_GROUPS = ['All Employees'];
 
-const DEPARTMENT_GROUPS = {
+const DEFAULT_DEPARTMENT_GROUPS = {
   'service delivery': ['Service Delivery'],
   sales: ['Sales'],
   '3d': ['3D Production'],
@@ -25,7 +27,7 @@ const DEPARTMENT_GROUPS = {
   developement: ['Engineering'],
 };
 
-const TEAM_GROUPS = {
+const DEFAULT_TEAM_GROUPS = {
   operations: ['Operations'],
   invision: ['Invision'],
   'hoa data': ['HOA Data'],
@@ -48,12 +50,18 @@ const TEAM_GROUPS = {
   admin: ['Admin'],
 };
 
-const JOB_POSITION_ROLE = {
-  operator: 'Standard User',
-  'squad lead': 'Team Lead',
-  'team leader': 'Team Lead',
-  modeler: 'Standard User',
-  'modeler team lead': 'Team Lead',
+const DEFAULT_POSITION_MAPPINGS = [
+  { position: 'Operator', accountType: ACCOUNT_TYPE.ZOHO, role: 'Standard User', insideMapsRoles: ['Operator'], active: true },
+  { position: 'Squad lead', accountType: ACCOUNT_TYPE.ZOHO, role: 'Team Lead', insideMapsRoles: ['Squad Lead'], active: true },
+  { position: 'Team leader', accountType: ACCOUNT_TYPE.ZOHO, role: 'Team Lead', insideMapsRoles: ['Team Leader'], active: true },
+  { position: 'Modeler', accountType: ACCOUNT_TYPE.INSIDEMAPS, role: 'Standard User', insideMapsRoles: ['Modeler'], active: true },
+  { position: 'Modeler Team Lead', accountType: ACCOUNT_TYPE.ZOHO, role: 'Team Lead', insideMapsRoles: ['Modeler Team Lead'], active: true },
+];
+
+const DEFAULT_DOMAIN_RULE = {
+  defaultDomain: 'insidemaps.com',
+  operationsDomain: 'services.insidemaps.com',
+  operationsTeams: ['Operations'],
 };
 
 const DEFAULT_ROLE = 'Standard User (Pending Auditor Review)';
@@ -66,41 +74,83 @@ function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
+export function getDefaultProvisioningRules(corporateEmailDomain = 'insidemaps.com') {
+  return {
+    version: 1,
+    updatedAt: null,
+    updatedBy: null,
+    baseGroups: [...BASE_GROUPS],
+    defaultRole: DEFAULT_ROLE,
+    domainRule: {
+      defaultDomain: corporateEmailDomain || DEFAULT_DOMAIN_RULE.defaultDomain,
+      operationsDomain: DEFAULT_DOMAIN_RULE.operationsDomain,
+      operationsTeams: [...DEFAULT_DOMAIN_RULE.operationsTeams],
+    },
+    positionMappings: DEFAULT_POSITION_MAPPINGS.map((mapping) => ({ ...mapping, insideMapsRoles: [...mapping.insideMapsRoles] })),
+    departmentGroups: { ...DEFAULT_DEPARTMENT_GROUPS },
+    teamGroups: { ...DEFAULT_TEAM_GROUPS },
+  };
+}
+
+export function resolveCorporateDomain(attributes = {}, rulesConfig = null, fallbackDefaultDomain = 'insidemaps.com') {
+  const domainRule = rulesConfig?.domainRule ?? {
+    ...DEFAULT_DOMAIN_RULE,
+    defaultDomain: fallbackDefaultDomain || DEFAULT_DOMAIN_RULE.defaultDomain,
+  };
+  const team = normalize(attributes.team);
+  const opsTeams = (domainRule.operationsTeams ?? DEFAULT_DOMAIN_RULE.operationsTeams).map(normalize);
+  if (team && opsTeams.includes(team)) {
+    return domainRule.operationsDomain || DEFAULT_DOMAIN_RULE.operationsDomain;
+  }
+  return domainRule.defaultDomain || fallbackDefaultDomain || DEFAULT_DOMAIN_RULE.defaultDomain;
+}
+
 /**
  * @param {{ department?: string, team?: string, subTeam?: string, jobPosition?: string }} attributes
- * @returns {{ role: string, groups: string[], needsReview: boolean, reasons: string[] }}
+ * @param {object} [rulesConfig]
+ * @returns {{ role: string, groups: string[], accountType: string, insideMapsRoles: string[], domain: string, needsReview: boolean, reasons: string[] }}
  */
-export function proposeAccountConfiguration(attributes = {}) {
+export function proposeAccountConfiguration(attributes = {}, rulesConfig = null) {
   const department = normalize(attributes.department);
   const team = normalize(attributes.team);
   const jobPosition = normalize(attributes.jobPosition);
 
+  const departmentGroupsMap = rulesConfig?.departmentGroups ?? DEFAULT_DEPARTMENT_GROUPS;
+  const teamGroupsMap = rulesConfig?.teamGroups ?? DEFAULT_TEAM_GROUPS;
+  const positionMappings = rulesConfig?.positionMappings ?? DEFAULT_POSITION_MAPPINGS;
+
   const reasons = [];
   let needsReview = false;
 
-  const departmentGroups = DEPARTMENT_GROUPS[department];
+  const departmentGroups = departmentGroupsMap[department];
   if (!departmentGroups) {
     needsReview = true;
     reasons.push(`No group mapping found for department "${attributes.department ?? ''}".`);
   }
 
-  const teamGroups = TEAM_GROUPS[team];
+  const teamGroups = teamGroupsMap[team];
   if (!teamGroups) {
     needsReview = true;
     reasons.push(`No group mapping found for team "${attributes.team ?? ''}".`);
   }
 
-  const role = JOB_POSITION_ROLE[jobPosition];
-  if (!role) {
+  const matchedPosition = positionMappings.find(
+    (entry) => entry.active !== false && normalize(entry.position) === jobPosition,
+  );
+  if (!matchedPosition) {
     needsReview = true;
-    reasons.push(`No role mapping found for job position "${attributes.jobPosition ?? ''}".`);
+    reasons.push(`No active account-type or role mapping found for job position "${attributes.jobPosition ?? ''}".`);
   }
 
   const groups = uniqueSorted([...BASE_GROUPS, ...(departmentGroups ?? []), ...(teamGroups ?? [])]);
+  const domain = resolveCorporateDomain(attributes, rulesConfig);
 
   return {
-    role: role ?? DEFAULT_ROLE,
+    role: matchedPosition?.role ?? DEFAULT_ROLE,
     groups,
+    accountType: matchedPosition?.accountType ?? ACCOUNT_TYPE.ZOHO,
+    insideMapsRoles: matchedPosition?.insideMapsRoles ?? (matchedPosition?.role ? [matchedPosition.role] : []),
+    domain,
     needsReview,
     reasons,
   };

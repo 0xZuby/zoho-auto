@@ -72,6 +72,7 @@ export function StageThreeReview({ values, errors, catalog, onChange, onEditStag
           <ReviewItem label="Sub team" value={resolveChoiceValue(values.subTeam, values.subTeamOther, catalog.otherValue)} />
           <ReviewItem label="Job position" value={resolveChoiceValue(values.jobPosition, values.jobPositionOther, catalog.otherValue)} />
           <ReviewItem label="Manager email" value={values.managerEmail} />
+          <ReviewItem label="Start date" value={values.startDate} onEdit={() => onEditStage(2)} />
           {showGithubFields && <ReviewItem label="GitHub profile" value={values.githubProfile || '—'} />}
           {showGithubFields && <ReviewItem label="GitHub repositories" value={values.githubRepositories || '—'} />}
         </dl>

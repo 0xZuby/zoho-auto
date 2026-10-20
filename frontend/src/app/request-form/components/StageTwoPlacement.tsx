@@ -14,6 +14,10 @@ interface StageTwoPlacementProps {
 }
 
 export function StageTwoPlacement({ values, errors, catalog, onChange, showRequesterEmail = true }: StageTwoPlacementProps) {
+  // Start date only drives the queue's urgency flag (PRD section 5/8) on
+  // the initial New hire submission — "Update employee info" reuses this
+  // same stage but the field is optional there.
+  const isStartDateRequired = showRequesterEmail;
   return (
     <div className="stack gap-24">
       <div className="stack gap-4">
@@ -63,6 +67,16 @@ export function StageTwoPlacement({ values, errors, catalog, onChange, showReque
           value={values.managerEmail}
           error={errors.managerEmail}
           onChange={(value) => onChange('managerEmail', value)}
+        />
+
+        <TextField
+          label="Start date"
+          required={isStartDateRequired}
+          type="date"
+          value={values.startDate}
+          error={errors.startDate}
+          hint="Used to flag requests as urgent as the start date approaches."
+          onChange={(value) => onChange('startDate', value)}
         />
 
         <ChoiceWithOtherField

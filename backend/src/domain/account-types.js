@@ -1,23 +1,35 @@
-/**
- * The two kinds of access an auditor can resolve a request to.
+﻿/**
+ * What an auditor can resolve a request to.
  *
- * `ZOHO` is the original, fully-automated path: the provisioning service
- * calls the Zoho Directory client to create/deactivate a real account.
+ * `ZOHO` creates only the Zoho Mail mailbox, directly (no invitation, no
+ * groups, no Directory role).
  *
- * `INSIDEMAPS` is a placeholder for a not-yet-built integration: the
- * employee is expected to sign up on the InsideMaps website themselves.
- * There is no InsideMaps API to call yet, so the provisioning service just
- * records that access was requested/revoked instead of contacting Zoho.
- * When that API exists, only `services/provisioning.js`'s INSIDEMAPS step
- * handlers should need to change.
+ * `INSIDEMAPS` creates only an InsideMaps account with the chosen roles.
+ *
+ * `ZOHO_AND_INSIDEMAPS` does both: the mailbox first, then the InsideMaps
+ * account + roles.
  */
 export const ACCOUNT_TYPE = {
   ZOHO: 'ZOHO',
   INSIDEMAPS: 'INSIDEMAPS',
+  ZOHO_AND_INSIDEMAPS: 'ZOHO_AND_INSIDEMAPS',
 };
 
 export const ACCOUNT_TYPES = Object.values(ACCOUNT_TYPE);
 
 export function isAccountType(value) {
   return ACCOUNT_TYPES.includes(value);
+}
+
+export function includesZoho(accountType) {
+  return accountType !== ACCOUNT_TYPE.INSIDEMAPS;
+}
+
+export function includesInsideMaps(accountType) {
+  return accountType === ACCOUNT_TYPE.INSIDEMAPS || accountType === ACCOUNT_TYPE.ZOHO_AND_INSIDEMAPS;
+}
+
+export function accountTypeFromFlags({ zoho, insideMaps }) {
+  if (zoho && insideMaps) return ACCOUNT_TYPE.ZOHO_AND_INSIDEMAPS;
+  return insideMaps ? ACCOUNT_TYPE.INSIDEMAPS : ACCOUNT_TYPE.ZOHO;
 }

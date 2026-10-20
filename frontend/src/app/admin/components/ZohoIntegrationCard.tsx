@@ -28,7 +28,7 @@ export function ZohoIntegrationCard() {
               <dt>Mode</dt>
               <dd>
                 <span className={`chip ${status.mode === 'live' ? 'chip-success' : 'chip-info'}`}>
-                  {status.mode === 'live' ? 'Live' : 'Simulated'}
+                  {status.connected ? 'Connected' : status.mode === 'live' ? 'Live' : 'Simulated'}
                 </span>
               </dd>
             </div>
@@ -41,11 +41,24 @@ export function ZohoIntegrationCard() {
               <dd>{status.organizationConfigured ? 'Yes' : 'No'}</dd>
             </div>
           </dl>
-          {status.mode === 'simulated' && (
+          {!status.setupReady && (
             <div className="notice notice-info">
-              Provisioning actions run against a simulated Zoho client. Set ZOHO_MODE=live and the ZOHO_* credentials
-              in backend/.env to provision real accounts.
+              Add the Zoho OAuth client details, organization ID, callback URL, and token encryption key to the API environment first.
             </div>
+          )}
+          <p className="text-sm text-muted">
+            {status.connected
+              ? 'Zoho Mail authorization is saved. Provisioning calls use this connection.'
+              : 'Connect the authorized Zoho organization account to enable live mailbox provisioning.'}
+          </p>
+          {status.setupReady ? (
+            <a className="btn btn-primary" href="/api/admin/zoho/connect">
+              {status.connected ? 'Reconnect Zoho Mail' : 'Connect Zoho Mail'}
+            </a>
+          ) : (
+            <button type="button" className="btn btn-primary" disabled>
+              Connect Zoho Mail
+            </button>
           )}
         </>
       )}

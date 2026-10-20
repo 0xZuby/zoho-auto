@@ -17,6 +17,7 @@ function baseSubmission(overrides = {}) {
     subTeam: 'Product',
     jobPosition: 'Operator',
     managerEmail: 'manager@insidemaps.com',
+    startDate: '2026-10-01',
     ...overrides,
   };
 }
@@ -29,9 +30,7 @@ function baseSubmission(overrides = {}) {
  * Zoho account.
  */
 function createRecordingZohoClient({ failOn } = {}) {
-  const calls = { createUser: 0, enableMail: 0, assignGroup: 0, verifyConfiguration: 0, deactivateUser: 0 };
-  const assignedGroups = [];
-
+  const calls = { createUser: 0, verifyConfiguration: 0, deactivateUser: 0 };
   /**
    * Checks whether THIS call (the one about to be counted as attempt
    * number `calls[step] + 1`) should fail, then always increments the
@@ -45,25 +44,11 @@ function createRecordingZohoClient({ failOn } = {}) {
 
   return {
     calls,
-    assignedGroups,
     async createUser() {
       const shouldFail = shouldFailThisAttempt('createUser');
       calls.createUser += 1;
       if (shouldFail) throw new Error('Simulated failure at step createUser');
-      return { zohoUserId: 'user-123' };
-    },
-    async enableMail() {
-      const shouldFail = shouldFailThisAttempt('enableMail');
-      calls.enableMail += 1;
-      if (shouldFail) throw new Error('Simulated failure at step enableMail');
-      return { mailEnabled: true };
-    },
-    async assignGroup({ group }) {
-      const shouldFail = shouldFailThisAttempt('assignGroup');
-      calls.assignGroup += 1;
-      if (shouldFail) throw new Error('Simulated failure at step assignGroup');
-      assignedGroups.push(group);
-      return { group, assigned: true };
+      return { zohoUserId: 'user-123', temporaryPassword: 'Tmp-Pass-123' };
     },
     async verifyConfiguration() {
       const shouldFail = shouldFailThisAttempt('verifyConfiguration');
@@ -86,8 +71,6 @@ async function setupApprovedRequest(store, submissionOverrides = {}) {
   const approved = await requestRepository.saveResolvedAccount(created.id, {
     actorId: 'auditor-1',
     corporateEmail: 'jane.doe@insidemaps.com',
-    role: 'Standard User',
-    groups: ['All Employees', 'Operations'],
   });
   return { requestRepository, request: approved };
 }
@@ -110,10 +93,13 @@ describe('provisioning engine', () => {
       assert.equal(allStepsSucceeded, true);
       assert.equal(finalRequest.status, STATUS.ACCOUNT_CREATED);
       assert.equal(zohoClient.calls.createUser, 1);
-      assert.equal(zohoClient.calls.enableMail, 1);
-      assert.equal(zohoClient.calls.assignGroup, 2); // All Employees + Operations
       assert.equal(zohoClient.calls.verifyConfiguration, 1);
       assert.ok(finalRequest.provisioning.completedAt);
+      assert.deepEqual(
+        finalRequest.provisioning.steps.map((step) => step.name).sort(),
+        ['check_email_availability', 'create_user', 'validate_employee', 'verify_configuration'],
+        'a Zoho-only account creates just the mailbox: no groups, role or invitation steps',
+      );
     } finally {
       await cleanup();
     }
@@ -144,7 +130,7 @@ describe('provisioning engine', () => {
     const { store, cleanup } = await createTempStore();
     try {
       const { requestRepository, request } = await setupApprovedRequest(store);
-      const zohoClient = createRecordingZohoClient({ failOn: { step: 'enableMail', onAttempt: 1 } });
+      const zohoClient = createRecordingZohoClient({ failOn: { step: 'verifyConfiguration', onAttempt: 1 } });
       const provisioningService = createProvisioningService({
         requestRepository,
         zohoClient,
@@ -156,7 +142,7 @@ describe('provisioning engine', () => {
       assert.ok(failure);
       assert.equal(finalRequest.status, STATUS.PARTIALLY_PROVISIONED);
       assert.equal(zohoClient.calls.createUser, 1);
-      assert.equal(zohoClient.calls.enableMail, 1);
+      assert.equal(zohoClient.calls.verifyConfiguration, 1);
     } finally {
       await cleanup();
     }
@@ -166,7 +152,7 @@ describe('provisioning engine', () => {
     const { store, cleanup } = await createTempStore();
     try {
       const { requestRepository, request } = await setupApprovedRequest(store);
-      const zohoClient = createRecordingZohoClient({ failOn: { step: 'enableMail', onAttempt: 1 } });
+      const zohoClient = createRecordingZohoClient({ failOn: { step: 'verifyConfiguration', onAttempt: 1 } });
       const provisioningService = createProvisioningService({
         requestRepository,
         zohoClient,
@@ -177,7 +163,7 @@ describe('provisioning engine', () => {
       assert.equal(first.request.status, STATUS.PARTIALLY_PROVISIONED);
       assert.equal(zohoClient.calls.createUser, 1);
 
-      // Retry: enableMail now succeeds (only fails on the very first
+      // Retry: verifyConfiguration now succeeds (only fails on the very first
       // attempt), so the retry should complete successfully...
       const second = await provisioningService.run(request.id);
 
@@ -190,32 +176,38 @@ describe('provisioning engine', () => {
     }
   });
 
-  test('retrying resumes group assignment from where it left off rather than re-assigning already-assigned groups', async () => {
+  test('ZOHO_AND_INSIDEMAPS creates the mailbox, then the InsideMaps account with its roles', async () => {
     const { store, cleanup } = await createTempStore();
     try {
-      const { requestRepository, request } = await setupApprovedRequest(store);
-      // Fail on the 2nd call to assignGroup (i.e. after "All Employees" has
-      // already been assigned, but before "Operations" is).
-      const zohoClient = createRecordingZohoClient({ failOn: { step: 'assignGroup', onAttempt: 2 } });
+      const requestRepository = createRequestRepository(store, { corporateEmailDomain: 'insidemaps.com' });
+      const created = await requestRepository.create(baseSubmission());
+      const approved = await requestRepository.saveResolvedAccount(created.id, {
+        actorId: 'auditor-1',
+        corporateEmail: 'jane.doe@insidemaps.com',
+        insideMapsRoles: ['IM_QC_REVIEWER'],
+        accountType: 'ZOHO_AND_INSIDEMAPS',
+      });
+      const zohoClient = createRecordingZohoClient();
+      const imRoles = [];
+      const insideMapsClient = {
+        async createUser() { return { insideMapsUserId: 'im-1' }; },
+        async assignRole({ role }) { imRoles.push(role); return { assigned: true }; },
+        async enforceSecurityPolicy() { return { twoStepVerificationRequired: true }; },
+      };
       const provisioningService = createProvisioningService({
         requestRepository,
         zohoClient,
+        insideMapsClient,
         checkEmailAvailability: async () => true,
       });
 
-      const first = await provisioningService.run(request.id);
-      assert.equal(first.request.status, STATUS.PARTIALLY_PROVISIONED);
-      assert.equal(zohoClient.assignedGroups.length, 1, 'only the first group should have been assigned before the failure');
+      const { request: finalRequest, allStepsSucceeded } = await provisioningService.run(approved.id);
 
-      const second = await provisioningService.run(request.id);
-      assert.equal(second.allStepsSucceeded, true);
-      // 3 total assignGroup calls across both runs: call 1 succeeds
-      // ("All Employees"), call 2 throws before assigning anything, then
-      // the retry makes exactly 1 more call for the remaining group
-      // ("Operations") — it must NOT re-call assignGroup for "All
-      // Employees", which already succeeded.
-      assert.equal(zohoClient.calls.assignGroup, 3);
-      assert.deepEqual(zohoClient.assignedGroups, ['All Employees', 'Operations']);
+      assert.equal(allStepsSucceeded, true);
+      assert.equal(zohoClient.calls.createUser, 1);
+      assert.deepEqual(imRoles, ['IM_QC_REVIEWER']);
+      assert.equal(finalRequest.status, STATUS.ACCOUNT_CREATED);
+      assert.equal(finalRequest.resolvedAccount.groups.length, 0);
     } finally {
       await cleanup();
     }
@@ -256,7 +248,7 @@ describe('provisioning engine', () => {
       assert.equal(allStepsSucceeded, true);
       assert.equal(zohoClient.calls.createUser, 0);
       assert.equal(zohoClient.calls.deactivateUser, 1);
-      assert.equal(finalRequest.status, STATUS.ACCOUNT_CREATED);
+      assert.equal(finalRequest.status, STATUS.ACCESS_REVOKED);
     } finally {
       await cleanup();
     }
@@ -278,6 +270,65 @@ describe('provisioning engine', () => {
 
       await assert.rejects(() => provisioningService.run(request.id), /already completed/i);
       assert.equal(zohoClient.calls.createUser, 0);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('an INSIDEMAPS account type calls InsideMaps APIs (createUser, assignRole, enforceSecurityPolicy)', async () => {
+    const { store, cleanup } = await createTempStore();
+    try {
+      const requestRepository = createRequestRepository(store, { corporateEmailDomain: 'insidemaps.com' });
+      const created = await requestRepository.create(baseSubmission({ jobPosition: 'QC' }));
+      const approved = await requestRepository.saveResolvedAccount(created.id, {
+        actorId: 'auditor-1',
+        corporateEmail: 'jane.doe@services.insidemaps.com',
+        role: 'Member',
+        groups: ['All Employees', 'Operations'],
+        insideMapsRoles: ['IM_QC_REVIEWER', 'IM_DEFAULT_USER'],
+        accountType: 'INSIDEMAPS',
+      });
+
+      const zohoClient = createRecordingZohoClient();
+      const imCalls = { createUser: 0, assignRole: [], enforceSecurityPolicy: 0, removeRoles: 0, deleteUser: 0 };
+      const insideMapsClient = {
+        async createUser({ email }) {
+          imCalls.createUser += 1;
+          return { imUserId: 'im-1', email };
+        },
+        async assignRole({ role }) {
+          imCalls.assignRole.push(role);
+          return { assigned: true, role };
+        },
+        async enforceSecurityPolicy() {
+          imCalls.enforceSecurityPolicy += 1;
+          return { twoStepVerificationRequired: true, forcePasswordChangeOnFirstLogin: true };
+        },
+        async removeRoles() {
+          imCalls.removeRoles += 1;
+          return { rolesRemoved: true };
+        },
+        async deleteUser() {
+          imCalls.deleteUser += 1;
+          return { deleted: true };
+        },
+      };
+
+      const provisioningService = createProvisioningService({
+        requestRepository,
+        zohoClient,
+        insideMapsClient,
+        checkEmailAvailability: async () => true,
+      });
+
+      const { request: finalRequest, allStepsSucceeded } = await provisioningService.run(approved.id);
+      assert.equal(allStepsSucceeded, true);
+      assert.equal(finalRequest.status, STATUS.ACCOUNT_CREATED);
+      assert.equal(zohoClient.calls.createUser, 0, 'Zoho createUser should not be called for INSIDEMAPS account type');
+      assert.equal(imCalls.createUser, 1);
+      assert.deepEqual(imCalls.assignRole, ['IM_QC_REVIEWER', 'IM_DEFAULT_USER']);
+      assert.equal(imCalls.enforceSecurityPolicy, 1);
+      assert.equal(finalRequest.provisioning.securityPolicy?.twoStepVerificationRequired, true);
     } finally {
       await cleanup();
     }

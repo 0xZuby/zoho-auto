@@ -36,6 +36,16 @@ export const env = {
   ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID ?? '',
   ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET ?? '',
   ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN ?? '',
+  ZOHO_OAUTH_REDIRECT_URI: process.env.ZOHO_OAUTH_REDIRECT_URI ?? '',
+  ZOHO_TOKEN_ENCRYPTION_KEY: process.env.ZOHO_TOKEN_ENCRYPTION_KEY ?? '',
+  FRONTEND_URL: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+
+  INSIDEMAPS_MODE: process.env.INSIDEMAPS_MODE === 'live' ? 'live' : 'simulated',
+  INSIDEMAPS_API_URL: process.env.INSIDEMAPS_API_URL ?? '',
+  INSIDEMAPS_API_TOKEN: process.env.INSIDEMAPS_API_TOKEN ?? '',
+
+  OFFBOARDING_TIMEZONE: process.env.OFFBOARDING_TIMEZONE ?? 'UTC',
+  GOOGLE_FORM_WEBHOOK_SECRET: process.env.GOOGLE_FORM_WEBHOOK_SECRET ?? '',
 
   MAIL_MODE: process.env.MAIL_MODE === 'smtp' ? 'smtp' : 'outbox',
   MAIL_FROM: process.env.MAIL_FROM ?? 'IT Provisioning <it@insidemaps.com>',
@@ -49,6 +59,14 @@ if (env.ZOHO_MODE === 'live') {
   for (const key of ['ZOHO_ORG_ID', 'ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET', 'ZOHO_REFRESH_TOKEN']) {
     if (!env[key]) {
       throw new Error(`${key} must be set when ZOHO_MODE=live.`);
+    }
+  }
+}
+
+if (env.INSIDEMAPS_MODE === 'live') {
+  for (const key of ['INSIDEMAPS_API_URL', 'INSIDEMAPS_API_TOKEN']) {
+    if (!env[key]) {
+      throw new Error(`${key} must be set when INSIDEMAPS_MODE=live.`);
     }
   }
 }

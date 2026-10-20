@@ -3,60 +3,83 @@
 import { useState } from 'react';
 import type { AccountType, OnboardingRequest } from '@/lib/types';
 import { ApiError } from '@/lib/api-client';
-import { saveResolvedAccount } from '@/lib/auditor-api';
+import { provisionRequest, saveResolvedAccount } from '@/lib/auditor-api';
 
 interface AccountSetupCardProps {
   request: OnboardingRequest;
   onSaved: (request: OnboardingRequest) => void;
 }
 
-const ACCOUNT_TYPE_OPTIONS: Array<{ value: AccountType; title: string; description: string }> = [
-  {
-    value: 'ZOHO',
-    title: 'Zoho account',
-    description: 'Provisioned automatically from this page — role and groups below apply.',
-  },
-  {
-    value: 'INSIDEMAPS',
-    title: 'InsideMaps account',
-    description: 'The employee signs up on the InsideMaps website; no role or groups to set here.',
-  },
-];
+function toAccountType(zoho: boolean, insideMaps: boolean): AccountType {
+  if (zoho && insideMaps) return 'ZOHO_AND_INSIDEMAPS';
+  return insideMaps ? 'INSIDEMAPS' : 'ZOHO';
+}
 
 /**
  * The security-boundary UI (PRD section 18): the deterministic proposal from
  * the rules engine is shown as a suggestion, but it is never provisionable
- * on its own. The auditor must explicitly save it (unchanged or edited) as
- * the resolved account before "Create Zoho user" becomes available.
+ * on its own. Clicking "Create" is the explicit auditor action that saves
+ * the resolved account (unchanged or edited) and then provisions it.
  */
 export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
   const isLeavingCompany = request.submission.requestType === 'LEAVING_COMPANY';
-  const isLocked = request.status !== 'PENDING_REVIEW' && request.status !== 'APPROVED';
+  const isLocked =
+    request.status !== 'PENDING_REVIEW' &&
+    request.status !== 'APPROVED' &&
+    request.status !== 'PROVISIONING_FAILED' &&
+    request.status !== 'PARTIALLY_PROVISIONED';
+  const hasRun = request.provisioning.steps.length > 0;
   const initial = request.resolvedAccount ?? request.proposedAccount;
+  const proposed = request.proposedAccount;
 
-  const [accountType, setAccountType] = useState<AccountType>(initial.accountType ?? 'ZOHO');
+  const [createZoho, setCreateZoho] = useState(initial.accountType !== 'INSIDEMAPS');
+  const [addInsideMaps, setAddInsideMaps] = useState(
+    initial.accountType === 'INSIDEMAPS' || initial.accountType === 'ZOHO_AND_INSIDEMAPS',
+  );
   const [corporateEmail, setCorporateEmail] = useState(initial.corporateEmail);
-  const [role, setRole] = useState(initial.role);
-  const [groupsText, setGroupsText] = useState(initial.groups.join(', '));
+  const [insideMapsRolesText, setInsideMapsRolesText] = useState(
+    (initial.insideMapsRoles?.length ? initial.insideMapsRoles : (proposed.insideMapsRoles ?? [])).join(', '),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const isApproved = Boolean(request.resolvedAccount);
-  const isZoho = accountType === 'ZOHO';
+  const accountType = toAccountType(createZoho, addInsideMaps);
+  const nothingSelected = !createZoho && !addInsideMaps;
+  const canCreate = !isLocked && !hasRun && !nothingSelected;
+  const fieldsLocked = isLocked || hasRun;
 
-  async function handleSave() {
+  // PRD section 9: highlight wherever the auditor's current values differ
+  // from the rules engine's proposal.
+  const emailOverridden = corporateEmail.trim() !== proposed.corporateEmail.trim();
+
+  async function handleSave(andCreate: boolean) {
     setErrors({});
     setSaveNotice(null);
     setIsSaving(true);
     try {
-      const groups = groupsText
+      const insideMapsRoles = insideMapsRolesText
         .split(',')
-        .map((group) => group.trim())
+        .map((r) => r.trim())
         .filter(Boolean);
-      const updated = await saveResolvedAccount(request.id, { corporateEmail, role, groups, accountType });
+      const updated = await saveResolvedAccount(request.id, {
+        corporateEmail,
+        insideMapsRoles: addInsideMaps ? insideMapsRoles : [],
+        accountType,
+      });
       onSaved(updated);
-      setSaveNotice('Account configuration saved.');
+      if (andCreate) {
+        const result = await provisionRequest(request.id);
+        onSaved(result.request);
+        setSaveNotice(
+          result.allStepsSucceeded
+            ? 'Accounts created.'
+            : 'Configuration saved, but a provisioning step failed. See Provisioning below to retry.',
+        );
+      } else {
+        setSaveNotice('Account configuration saved.');
+      }
     } catch (error) {
       if (error instanceof ApiError && error.payload.errors) {
         setErrors(error.payload.errors);
@@ -77,7 +100,7 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
       {isLeavingCompany ? (
         <>
           <p className="card-section-intro">
-            Offboarding disables both access points in one step — there&apos;s nothing to choose or approve here.
+            Offboarding disables both access points in one step. There is nothing to choose or approve here.
           </p>
           <div className="notice notice-info stack gap-4">
             <span>
@@ -92,8 +115,16 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
         <span className="chip chip-warning" style={{ alignSelf: 'flex-start' }}>Rules engine flagged for review</span>
       )}
       <p className="card-section-intro">
-        Choose how this employee gets access, review the configuration, then save it before any provisioning action can run.
+        Create the Zoho Mail mailbox in one click — no invitation is sent. Optionally add an InsideMaps account with roles.
       </p>
+
+      {request.proposedAccount.collisionAdjusted && (
+        <div className="notice notice-warning">
+          <strong>Email collision resolved:</strong> Base address{' '}
+          <code>{request.proposedAccount.baseEmail}</code> was already in use. Automatically adjusted to next available
+          suffix starting at 2: <code>{request.proposedAccount.corporateEmail}</code>.
+        </div>
+      )}
 
       {request.proposedAccount.needsReview && request.proposedAccount.reasons.length > 0 && (
         <div className="notice notice-warning">
@@ -106,89 +137,73 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
       )}
 
       <div className="field">
-        <span className="field-label">Account type</span>
-        <div className="radio-group" role="radiogroup" aria-label="Account type">
-          {ACCOUNT_TYPE_OPTIONS.map((option) => {
-            const selected = accountType === option.value;
-            return (
-              <label key={option.value} className={`radio-option${selected ? ' selected' : ''}`} style={{ alignItems: 'flex-start' }}>
-                <input
-                  type="radio"
-                  name="accountType"
-                  value={option.value}
-                  checked={selected}
-                  onChange={() => setAccountType(option.value)}
-                  disabled={isLocked}
-                  style={{ accentColor: 'var(--accent)', marginTop: 3 }}
-                />
-                <span className="stack gap-2">
-                  <span>{option.title}</span>
-                  <span className="text-faint text-sm">{option.description}</span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <label className="field-label" htmlFor="corporate-email">
+          Corporate email
+        </label>
+        <input
+          id="corporate-email"
+          className={`input${errors.corporateEmail ? ' has-error' : ''}`}
+          value={corporateEmail}
+          onChange={(event) => setCorporateEmail(event.target.value)}
+          disabled={fieldsLocked}
+        />
+        {errors.corporateEmail && <span className="field-error">{errors.corporateEmail}</span>}
+        {emailOverridden && <OverrideNote proposedValue={proposed.corporateEmail} />}
       </div>
 
-      <div className="form-grid">
-        <div className="field span-2">
-          <label className="field-label" htmlFor="corporate-email">
-            Corporate email
+      <div className="stack gap-8">
+        <label className={`radio-option${createZoho ? ' selected' : ''}`} style={{ alignItems: 'flex-start' }}>
+          <input
+            type="checkbox"
+            checked={createZoho}
+            onChange={(event) => setCreateZoho(event.target.checked)}
+            disabled={fieldsLocked}
+            style={{ accentColor: 'var(--accent)', marginTop: 3 }}
+          />
+          <span className="stack gap-2">
+            <strong style={{ fontSize: 13.5 }}>Zoho Mail account</strong>
+            <span className="text-faint text-sm">
+              Creates the mailbox directly. The employee receives a temporary password by email.
+            </span>
+          </span>
+        </label>
+
+        <label className={`radio-option${addInsideMaps ? ' selected' : ''}`} style={{ alignItems: 'flex-start' }}>
+          <input
+            type="checkbox"
+            checked={addInsideMaps}
+            onChange={(event) => setAddInsideMaps(event.target.checked)}
+            disabled={fieldsLocked}
+            style={{ accentColor: 'var(--accent)', marginTop: 3 }}
+          />
+          <span className="stack gap-2">
+            <strong style={{ fontSize: 13.5 }}>Also create an InsideMaps account</strong>
+            <span className="text-faint text-sm">
+              Creates the user through the InsideMaps API, assigns the roles below and enforces 2SV.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {addInsideMaps && (
+        <div className="field">
+          <label className="field-label" htmlFor="insidemaps-roles">
+            InsideMaps roles (comma-separated)
           </label>
           <input
-            id="corporate-email"
-            className={`input${errors.corporateEmail ? ' has-error' : ''}`}
-            value={corporateEmail}
-            onChange={(event) => setCorporateEmail(event.target.value)}
-            disabled={isLocked}
+            id="insidemaps-roles"
+            className={`input${errors.insideMapsRoles ? ' has-error' : ''}`}
+            value={insideMapsRolesText}
+            onChange={(event) => setInsideMapsRolesText(event.target.value)}
+            placeholder="IM_DEFAULT_USER"
+            disabled={fieldsLocked}
           />
-          {errors.corporateEmail && <span className="field-error">{errors.corporateEmail}</span>}
-        </div>
-
-        {isZoho && (
-          <>
-            <div className="field">
-              <label className="field-label" htmlFor="account-role">
-                Role
-              </label>
-              <input
-                id="account-role"
-                className={`input${errors.role ? ' has-error' : ''}`}
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                disabled={isLocked}
-              />
-              {errors.role && <span className="field-error">{errors.role}</span>}
-            </div>
-
-            <div className="field span-2">
-              <label className="field-label" htmlFor="account-groups">
-                Groups
-              </label>
-              <input
-                id="account-groups"
-                className={`input${errors.groups ? ' has-error' : ''}`}
-                value={groupsText}
-                onChange={(event) => setGroupsText(event.target.value)}
-                placeholder="All Employees, Operations"
-                disabled={isLocked}
-              />
-              <span className="field-hint">Comma-separated group names.</span>
-              {errors.groups && <span className="field-error">{errors.groups}</span>}
-            </div>
-          </>
-        )}
-      </div>
-
-      {!isZoho && (
-        <div className="notice notice-info">
-          InsideMaps account provisioning isn&apos;t automated yet — saving this only records that the employee should sign
-          up on the InsideMaps website with this email.
+          {errors.insideMapsRoles && <span className="field-error">{errors.insideMapsRoles}</span>}
         </div>
       )}
 
       {errors._form && <div className="notice notice-error">{errors._form}</div>}
+      {errors.accountType && <div className="notice notice-error">{errors.accountType}</div>}
       {saveNotice && !errors._form && <div className="notice notice-success">{saveNotice}</div>}
 
       {isApproved && (
@@ -197,13 +212,38 @@ export function AccountSetupCard({ request, onSaved }: AccountSetupCardProps) {
         </div>
       )}
 
-      {!isLocked && (
-        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={isSaving} style={{ alignSelf: 'flex-start' }}>
-          {isSaving ? 'Saving…' : isApproved ? 'Update account configuration' : 'Approve account configuration'}
-        </button>
+      {!isLocked && !hasRun && (
+        <div className="row" style={{ gap: 10 }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => handleSave(true)}
+            disabled={isSaving || nothingSelected}
+          >
+            {isSaving ? 'Working…' : 'Create accounts'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => handleSave(false)}
+            disabled={isSaving || nothingSelected}
+          >
+            {isApproved ? 'Update configuration only' : 'Approve without creating'}
+          </button>
+        </div>
       )}
         </>
       )}
     </section>
+  );
+}
+
+/** Shown next to a field whose current value differs from the rules
+ * engine's proposal, so the override is visible before it's saved. */
+function OverrideNote({ proposedValue }: { proposedValue: string }) {
+  return (
+    <span className="field-hint override-note">
+      Overrides rules engine proposal: <strong>{proposedValue}</strong>
+    </span>
   );
 }

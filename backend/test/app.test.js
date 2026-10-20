@@ -169,6 +169,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Operator',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
       assert.equal(submitResult.status, 201);
@@ -214,6 +215,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Operator',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
       assert.equal(submitResult.status, 201);
@@ -266,6 +268,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Operator',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
 
@@ -325,6 +328,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Operator',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
 
@@ -348,6 +352,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Squad lead',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
       assert.equal(updateResult.status, 200);
@@ -381,6 +386,7 @@ describe('app: health, auth, and role gating', () => {
           subTeam: 'Product',
           jobPosition: 'Operator',
           managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
         },
       });
 
@@ -394,6 +400,221 @@ describe('app: health, auth, and role gating', () => {
       await signInAdmin(server);
       const queue = await server.request('/api/auditor/requests');
       assert.ok(queue.body.some((request) => request.requestType === 'LEAVING_COMPANY' && request.nameAndSurname === 'Omar Ali'));
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test('MVP lifecycle features: dynamic rules, domain mapping, collision suffix starting at 2, scheduled offboarding, batch provisioning, and audit log', async () => {
+    const server = await startTestServer();
+    try {
+      await signInAdmin(server);
+
+      // 1. Admin configures position -> accountType mapping and domain rule
+      const initialRulesRes = await server.request('/api/admin/rules');
+      assert.equal(initialRulesRes.status, 200);
+      const initialRules = initialRulesRes.body;
+      assert.equal(initialRules.domainRule.defaultDomain, 'insidemaps.com');
+      assert.equal(initialRules.domainRule.operationsDomain, 'services.insidemaps.com');
+
+      const updateRulesRes = await server.request('/api/admin/rules', {
+        method: 'PUT',
+        body: {
+          domainRule: initialRules.domainRule,
+          positionMappings: [
+            ...initialRules.positionMappings.filter((m) => m.position !== 'Operator'),
+            {
+              position: 'Operator',
+              accountType: 'INSIDEMAPS',
+              role: 'Member',
+              insideMapsRoles: ['IM_OPERATOR_SPECIALIST'],
+              active: true,
+            },
+          ],
+        },
+      });
+      assert.equal(updateRulesRes.status, 200);
+
+      // 2. HR submits two requests with the same name in Operations team -> services.insidemaps.com + suffix 2 on collision
+      await signInHr(server);
+
+      const firstSub = await server.request('/api/form/submit', {
+        method: 'POST',
+        body: {
+          requesterEmail: 'requester@insidemaps.com',
+          requestType: 'NEW_HIRE',
+          nameAndSurname: 'Alex Mercer',
+          privateEmail: 'alex1@gmail.com',
+          country: 'Ukraine',
+          department: 'Sales',
+          team: 'Operations',
+          subTeam: 'Product',
+          jobPosition: 'Operator',
+          managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
+        },
+      });
+      assert.equal(firstSub.status, 201);
+
+      const secondSub = await server.request('/api/form/submit', {
+        method: 'POST',
+        body: {
+          requesterEmail: 'requester@insidemaps.com',
+          requestType: 'NEW_HIRE',
+          nameAndSurname: 'Alex Mercer',
+          privateEmail: 'alex2@gmail.com',
+          country: 'Ukraine',
+          department: 'Sales',
+          team: 'Operations',
+          subTeam: 'Product',
+          jobPosition: 'Operator',
+          managerEmail: 'manager@insidemaps.com',
+          startDate: '2026-10-01',
+        },
+      });
+      assert.equal(secondSub.status, 201);
+
+      await signInAdmin(server);
+      const queueRes = await server.request('/api/auditor/requests');
+      const [secondReqSummary, firstReqSummary] = queueRes.body;
+      assert.equal(firstReqSummary.proposedCorporateEmail, 'alex.mercer@services.insidemaps.com');
+      assert.equal(firstReqSummary.accountType, 'INSIDEMAPS');
+      assert.equal(secondReqSummary.proposedCorporateEmail, 'alex.mercer2@services.insidemaps.com');
+      assert.equal(secondReqSummary.collisionAdjusted, true);
+
+      // 3. Approve both and run batch provisioning (InsideMaps API flow)
+      const firstDetail = (await server.request(`/api/auditor/requests/${firstReqSummary.id}`)).body;
+      const secondDetail = (await server.request(`/api/auditor/requests/${secondReqSummary.id}`)).body;
+
+      await server.request(`/api/auditor/requests/${firstDetail.id}/account`, {
+        method: 'PUT',
+        body: {
+          corporateEmail: firstDetail.proposedAccount.corporateEmail,
+          role: firstDetail.proposedAccount.role,
+          groups: firstDetail.proposedAccount.groups,
+          insideMapsRoles: firstDetail.proposedAccount.insideMapsRoles,
+          accountType: 'INSIDEMAPS',
+        },
+      });
+      await server.request(`/api/auditor/requests/${secondDetail.id}/account`, {
+        method: 'PUT',
+        body: {
+          corporateEmail: secondDetail.proposedAccount.corporateEmail,
+          role: secondDetail.proposedAccount.role,
+          groups: secondDetail.proposedAccount.groups,
+          insideMapsRoles: secondDetail.proposedAccount.insideMapsRoles,
+          accountType: 'INSIDEMAPS',
+        },
+      });
+
+      const batchRes = await server.request('/api/auditor/requests/batch-provision', {
+        method: 'POST',
+        body: { requestIds: [firstDetail.id, secondDetail.id] },
+      });
+      assert.equal(batchRes.status, 200);
+      assert.equal(batchRes.body.processed, 2);
+      assert.equal(batchRes.body.results.every((r) => r.ok && r.request.status === 'ACCOUNT_CREATED'), true);
+
+      // 4. Preview notification and send setup invite
+      const previewRes = await server.request(`/api/auditor/requests/${firstDetail.id}/notification-preview`);
+      assert.equal(previewRes.status, 200);
+      assert.match(previewRes.body.text, /Two-Step Verification/i);
+
+      const notifyRes = await server.request(`/api/auditor/requests/${firstDetail.id}/notify`, { method: 'POST' });
+      assert.equal(notifyRes.status, 200);
+
+      // 5. Schedule future offboarding and then trigger due offboardings
+      await signInHr(server);
+      const futureOffboardRes = await server.request(`/api/form/employees/${firstDetail.id}/offboard`, {
+        method: 'POST',
+        body: {
+          effectiveLeaveDate: '2099-12-31',
+          effectiveLeaveTimezone: 'UTC',
+          leavingReason: 'End of contract',
+        },
+      });
+      assert.equal(futureOffboardRes.status, 201);
+      assert.equal(futureOffboardRes.body.status, 'SCHEDULED_OFFBOARDING');
+
+      await signInAdmin(server);
+      const runDueRes = await server.request('/api/auditor/offboarding/run-due', {
+        method: 'POST',
+        body: { asOfIso: '2100-01-01T00:00:00.000Z' },
+      });
+      assert.equal(runDueRes.status, 200);
+      assert.equal(runDueRes.body.processed, 1);
+      assert.equal(runDueRes.body.results[0].ok, true);
+
+      // 6. Verify system audit log
+      const auditJsonRes = await server.request('/api/auditor/audit-log?system=INSIDEMAPS');
+      assert.equal(auditJsonRes.status, 200);
+      assert.ok(auditJsonRes.body.length >= 2);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test('Google Form webhook (/api/webhooks/google-form) automatically determines requestType for new hire, update, and offboarding', async () => {
+    const server = await startTestServer();
+    try {
+      // 1. Raw Google Form payload -> detected as NEW_HIRE
+      const hireRes = await server.request('/api/webhooks/google-form', {
+        method: 'POST',
+        body: {
+          namedValues: {
+            'Email Address': ['hr@insidemaps.com'],
+            'Name and Surname': ['Elena Rostova'],
+            'Personal Email': ['elena.rostova@gmail.com'],
+            Country: ['Serbia'],
+            Department: ['Service Delivery'],
+            Team: ['Operations'],
+            'Sub Team': ['Capture'],
+            'Job Position': ['Operator'],
+            'Manager Email': ['lead@insidemaps.com'],
+            'Start Date': ['2026-11-01'],
+          },
+        },
+      });
+      assert.equal(hireRes.status, 201);
+      assert.equal(hireRes.body.detectedRequestType, 'NEW_HIRE');
+      assert.equal(hireRes.body.proposedCorporateEmail, 'elena.rostova@services.insidemaps.com');
+
+      // 2. Submitting an update for the same employee -> detected as UPDATE_EMPLOYEE_INFO
+      const updateRes = await server.request('/api/webhooks/google-form', {
+        method: 'POST',
+        body: {
+          namedValues: {
+            'Email Address': ['hr@insidemaps.com'],
+            'Request Type': ['Update employee info'],
+            'Name and Surname': ['Elena Rostova'],
+            'Personal Email': ['elena.rostova@gmail.com'],
+            Country: ['Serbia'],
+            Department: ['Service Delivery'],
+            Team: ['Operations'],
+            'Sub Team': ['Capture'],
+            'Job Position': ['Team leader'],
+            'Manager Email': ['lead@insidemaps.com'],
+          },
+        },
+      });
+      assert.equal(updateRes.status, 200);
+      assert.equal(updateRes.body.detectedRequestType, 'UPDATE_EMPLOYEE_INFO');
+
+      // 3. Submitting with an Effective Leave Date -> detected as LEAVING_COMPANY and scheduled
+      const leaveRes = await server.request('/api/webhooks/google-form', {
+        method: 'POST',
+        body: {
+          namedValues: {
+            'Email Address': ['hr@insidemaps.com'],
+            'Personal Email': ['elena.rostova@gmail.com'],
+            'Effective Leave Date': ['2099-12-31'],
+            'Leaving Reason': ['Relocation'],
+          },
+        },
+      });
+      assert.equal(leaveRes.status, 201);
+      assert.equal(leaveRes.body.detectedRequestType, 'LEAVING_COMPANY');
+      assert.equal(leaveRes.body.status, 'SCHEDULED_OFFBOARDING');
     } finally {
       await server.stop();
     }

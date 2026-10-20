@@ -15,31 +15,61 @@ import { randomUUID } from 'node:crypto';
  * single-message-type use case.
  */
 
-function renderNotificationEmail({ employeeName, corporateEmail, organizationLoginUrl, supportEmail }) {
-  const subject = `Your new ${corporateEmail.split('@')[1]} account is ready`;
-  const text = [
+function renderNotificationEmail({ employeeName, corporateEmail, accountType = 'ZOHO', temporaryPassword, organizationLoginUrl, supportEmail }) {
+  const domain = corporateEmail.split('@')[1] || 'insidemaps.com';
+  const subject = `Your new ${domain} account is ready`;
+  const hasZoho = accountType !== 'INSIDEMAPS';
+  const hasInsideMaps = accountType === 'INSIDEMAPS' || accountType === 'ZOHO_AND_INSIDEMAPS';
+  const accountLabel = [hasZoho ? 'Zoho Mail' : null, hasInsideMaps ? 'InsideMaps' : null].filter(Boolean).join(' + ');
+  const lines = [
     `Hi ${employeeName},`,
     '',
     'Your corporate account has been created. Here are your account details:',
     '',
+    `Account type: ${accountLabel}`,
     `Corporate email: ${corporateEmail}`,
-    `Organization login: ${organizationLoginUrl}`,
+  ];
+  if (hasZoho) {
+    lines.push(`Zoho Mail login: ${organizationLoginUrl}`);
+    if (temporaryPassword) lines.push(`Temporary password: ${temporaryPassword}`);
+  }
+  if (hasInsideMaps) lines.push('InsideMaps login: https://app.insidemaps.com');
+  lines.push(
     '',
-    'Follow the activation instructions sent by Zoho to set your password and sign in for the first time.',
+    'First-Login Policy:',
+    '• You will be prompted to change your password on first login.',
+    ...(hasInsideMaps ? ['• Two-Step Verification (2SV / MFA) is enforced for your InsideMaps account and must be enrolled during setup.'] : []),
     '',
     `If you have any trouble accessing your account, contact ${supportEmail}.`,
     '',
     'Welcome aboard!',
-  ].join('\n');
-  return { subject, text };
+  );
+  return { subject, text: lines.join('\n') };
+}
+
+function renderOperationalAlertEmail({ requestCode, employeeName, corporateEmail, accountType, outcome, step, system, reason, nextAction }) {
+  const subject = `[InsideOps ${outcome}] ${requestCode} — ${employeeName}`;
+  const lines = [
+    `Lifecycle Run Update — ${requestCode}`,
+    '',
+    `Request ID: ${requestCode}`,
+    `Employee: ${employeeName}`,
+    `Affected Account: ${corporateEmail || 'N/A'} (${accountType || 'ZOHO'})`,
+    `Outcome: ${outcome}`,
+  ];
+  if (step) lines.push(`Step / System: ${step} (${system || 'PORTAL'})`);
+  if (reason) lines.push(`Reason: ${reason}`);
+  lines.push(`Next Action: ${nextAction}`);
+  return { subject, text: lines.join('\n') };
 }
 
 export function createOutboxMailer(dataDir) {
   const outboxDir = join(dataDir, 'outbox');
   return {
     mode: 'outbox',
-    async sendAccountNotification({ recipient, employeeName, corporateEmail, organizationLoginUrl, supportEmail }) {
-      const { subject, text } = renderNotificationEmail({ employeeName, corporateEmail, organizationLoginUrl, supportEmail });
+    renderNotificationEmail,
+    async sendAccountNotification({ recipient, employeeName, corporateEmail, accountType, temporaryPassword, organizationLoginUrl, supportEmail }) {
+      const { subject, text } = renderNotificationEmail({ employeeName, corporateEmail, accountType, temporaryPassword, organizationLoginUrl, supportEmail });
       await mkdir(outboxDir, { recursive: true });
       const fileName = `${new Date().toISOString().replace(/[:.]/g, '-')}_${randomUUID().slice(0, 8)}.json`;
       await writeFile(
@@ -49,21 +79,37 @@ export function createOutboxMailer(dataDir) {
       );
       return { delivered: true, transport: 'outbox', file: fileName };
     },
+    async sendOperationalAlert({ recipients, requestCode, employeeName, corporateEmail, accountType, outcome, step, system, reason, nextAction }) {
+      const { subject, text } = renderOperationalAlertEmail({ requestCode, employeeName, corporateEmail, accountType, outcome, step, system, reason, nextAction });
+      await mkdir(outboxDir, { recursive: true });
+      const fileName = `alert_${new Date().toISOString().replace(/[:.]/g, '-')}_${randomUUID().slice(0, 8)}.json`;
+      await writeFile(
+        join(outboxDir, fileName),
+        JSON.stringify({ to: recipients, subject, text, sentAt: new Date().toISOString() }, null, 2),
+        'utf8',
+      );
+      return { delivered: true, transport: 'outbox', file: fileName };
+    },
   };
 }
 
-/**
- * Minimal SMTP client over STARTTLS using only Node built-ins. Supports the
- * common case of an authenticated SMTP relay (Zoho Mail SMTP, SES SMTP,
- * Gmail SMTP relay, etc.) sending a single plain-text message.
- */
 export function createSmtpMailer({ host, port, user, pass, from }) {
   return {
     mode: 'smtp',
-    async sendAccountNotification({ recipient, employeeName, corporateEmail, organizationLoginUrl, supportEmail }) {
-      const { subject, text } = renderNotificationEmail({ employeeName, corporateEmail, organizationLoginUrl, supportEmail });
+    renderNotificationEmail,
+    async sendAccountNotification({ recipient, employeeName, corporateEmail, accountType, temporaryPassword, organizationLoginUrl, supportEmail }) {
+      const { subject, text } = renderNotificationEmail({ employeeName, corporateEmail, accountType, temporaryPassword, organizationLoginUrl, supportEmail });
       const { sendMailOverSmtp } = await import('../lib/smtp-client.js');
       await sendMailOverSmtp({ host, port, user, pass, from, to: recipient, subject, text });
+      return { delivered: true, transport: 'smtp' };
+    },
+    async sendOperationalAlert({ recipients, requestCode, employeeName, corporateEmail, accountType, outcome, step, system, reason, nextAction }) {
+      const { subject, text } = renderOperationalAlertEmail({ requestCode, employeeName, corporateEmail, accountType, outcome, step, system, reason, nextAction });
+      const { sendMailOverSmtp } = await import('../lib/smtp-client.js');
+      for (const recipient of recipients) {
+        if (!recipient) continue;
+        await sendMailOverSmtp({ host, port, user, pass, from, to: recipient, subject, text });
+      }
       return { delivered: true, transport: 'smtp' };
     },
   };

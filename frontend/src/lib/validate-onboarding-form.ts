@@ -71,6 +71,14 @@ export function validateStageTwo(values: OnboardingFormValues, catalog: FormCata
   requireChoice(errors, 'jobPosition', values.jobPosition, 'jobPositionOther', values.jobPositionOther, catalog.jobPositions, catalog.otherValue, 'Job position');
 
   requireEmail(errors, 'managerEmail', values.managerEmail, 'Enter the Team Lead / Manager email.');
+
+  // Only required on the New hire wizard: HR editing an existing
+  // employee's placement (Update employee info) reuses this same stage
+  // component but never needs the field to be filled to proceed.
+  if (values.requestType === 'NEW_HIRE' && !values.startDate.trim()) {
+    errors.startDate = "Enter the employee's start date.";
+  }
+
   return errors;
 }
 

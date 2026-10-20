@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getMetrics, listRequests } from '@/lib/auditor-api';
 import type { DashboardMetrics, RequestSummary } from '@/lib/types';
 import { useAuditorUser } from './AuditorUserContext';
@@ -8,34 +8,40 @@ import { InstrumentPanel } from './components/InstrumentPanel';
 import { Placeholder } from './components/Placeholder';
 import { RequestQueueTable } from './components/RequestQueueTable';
 import { RequestTypeBreakdown } from './components/RequestTypeBreakdown';
-
-const RECENT_LIMIT = 6;
+import { SecurityOffboardingWatch } from './components/SecurityOffboardingWatch';
+import { NEEDS_ACTION_STATUSES } from './statusPresentation';
 
 export default function AuditorHomePage() {
   const user = useAuditorUser();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [requests, setRequests] = useState<RequestSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [queueStatusFilter, setQueueStatusFilter] = useState('ALL');
 
-  useEffect(() => {
-    let isMounted = true;
-
-    Promise.all([getMetrics(), listRequests()])
-      .then(([metricsResult, requestsResult]) => {
-        if (!isMounted) return;
-        setMetrics(metricsResult);
-        setRequests(requestsResult);
-      })
-      .catch(() => {
-        if (isMounted) setLoadError('Could not load the dashboard. Refresh the page to try again.');
-      });
-
-    return () => {
-      isMounted = false;
-    };
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const [metricsResult, requestsResult] = await Promise.all([getMetrics(), listRequests()]);
+      setMetrics(metricsResult);
+      setRequests(requestsResult);
+      setLoadError(null);
+    } catch {
+      setLoadError('Could not load the dashboard. Refresh the page to try again.');
+    }
   }, []);
 
-  const recentRequests = requests?.slice(0, RECENT_LIMIT) ?? null;
+  useEffect(() => {
+    refreshDashboard();
+  }, [refreshDashboard]);
+
+  // Home is action-first (PRD section 8): only current (non-superseded)
+  // requests still needing someone's attention show up here.
+  const actionQueueRequests = useMemo(() => {
+    if (!requests) return null;
+    const supersededIds = new Set(requests.map((request) => request.previousRequestId).filter(Boolean));
+    return requests.filter(
+      (request) => !supersededIds.has(request.id) && NEEDS_ACTION_STATUSES.includes(request.status),
+    );
+  }, [requests]);
 
   return (
     <main className="ops-main">
@@ -53,15 +59,27 @@ export default function AuditorHomePage() {
 
       {loadError && <div className="notice notice-error">{loadError}</div>}
 
-      {metrics ? <InstrumentPanel metrics={metrics} /> : <Placeholder height={132} label="Reading volume" />}
+      {metrics ? (
+        <InstrumentPanel metrics={metrics} activeFilter={queueStatusFilter} onSelectFilter={setQueueStatusFilter} />
+      ) : (
+        <Placeholder height={132} label="Reading volume" />
+      )}
+
+      {requests && (
+        <SecurityOffboardingWatch requests={requests} onActionSuccess={refreshDashboard} />
+      )}
 
       {metrics ? <RequestTypeBreakdown metrics={metrics} /> : <Placeholder height={160} label="Reading breakdown" />}
 
-      {recentRequests && requests ? (
+      {actionQueueRequests ? (
         <RequestQueueTable
-          requests={recentRequests}
-          title="Recent activity"
-          subtitle={`Latest ${recentRequests.length} of ${requests.length} · newest first`}
+          requests={actionQueueRequests}
+          title="Needs you"
+          variant="action-queue"
+          statusFilter={queueStatusFilter}
+          onStatusFilterChange={setQueueStatusFilter}
+          onActionSuccess={refreshDashboard}
+          emptyMessage="Nothing needs your attention right now."
           viewAllHref="/auditor/employees/all"
         />
       ) : (
@@ -70,3 +88,4 @@ export default function AuditorHomePage() {
     </main>
   );
 }
+

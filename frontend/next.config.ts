@@ -3,6 +3,7 @@ import type { NextConfig } from 'next';
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:4000';
 
 const nextConfig: NextConfig = {
+  distDir: '.next-build',
   reactStrictMode: true,
   // Pin the Turbopack workspace root to this directory. Without this,
   // Next.js's root-inference walks up looking for lockfiles and finds the

@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import type { OnboardingRequest } from '@/lib/types';
 import { ApiError } from '@/lib/api-client';
-import { resendAccountNotification, sendAccountNotification } from '@/lib/auditor-api';
+import {
+  previewAccountNotification,
+  resendAccountNotification,
+  sendAccountNotification,
+  type NotificationPreview,
+} from '@/lib/auditor-api';
 import { formatDateTime } from '../../../statusPresentation';
 
 interface NotificationCardProps {
@@ -14,11 +19,30 @@ interface NotificationCardProps {
 export function NotificationCard({ request, onUpdated }: NotificationCardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<NotificationPreview | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const canSend = request.status === 'ACCOUNT_CREATED';
   const canResend = request.status === 'COMPLETED' && request.notification.sent;
 
   if (!canSend && !canResend) return null;
+
+  async function handlePreview() {
+    if (preview) {
+      setPreview(null);
+      return;
+    }
+    setIsLoadingPreview(true);
+    setError(null);
+    try {
+      const data = await previewAccountNotification(request.id);
+      setPreview(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load setup invitation preview.');
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }
 
   async function handleSend(isResend: boolean) {
     setIsSubmitting(true);
@@ -35,10 +59,31 @@ export function NotificationCard({ request, onUpdated }: NotificationCardProps) 
 
   return (
     <section className="card card-padded detail-card stack gap-16">
-      <h2 style={{ fontSize: 15 }}>Account notification</h2>
-      <p className="card-section-intro">Send the account details to the employee’s personal email.</p>
+      <div className="row-between">
+        <h2 style={{ fontSize: 15 }}>Account setup invitation</h2>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handlePreview} disabled={isLoadingPreview}>
+          {isLoadingPreview ? 'Loading…' : preview ? 'Hide preview' : 'Preview email'}
+        </button>
+      </div>
+      <p className="card-section-intro">
+        Sends setup instructions, first-login password change requirement, and 2-Step Verification (2SV) enrollment steps
+        to the employee&rsquo;s private email.
+      </p>
 
       {error && <div className="notice notice-error">{error}</div>}
+
+      {preview && (
+        <div className="card card-padded stack gap-8" style={{ background: '#fbfaf9' }}>
+          <div className="row-between">
+            <strong className="text-sm">{preview.subject}</strong>
+            <span className="text-xs text-muted">To: {preview.recipient}</span>
+          </div>
+          {preview.managerEmail && (
+            <span className="text-xs text-muted">Manager operational alert: {preview.managerEmail}</span>
+          )}
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, margin: 0 }}>{preview.text}</pre>
+        </div>
+      )}
 
       {request.notification.sent && (
         <dl className="definition-list">
@@ -55,13 +100,13 @@ export function NotificationCard({ request, onUpdated }: NotificationCardProps) 
 
       {canSend && (
         <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={() => handleSend(false)} disabled={isSubmitting}>
-          {isSubmitting ? 'Sending…' : 'Send account information'}
+          {isSubmitting ? 'Sending…' : 'Send setup invitation'}
         </button>
       )}
 
       {canResend && (
         <button type="button" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => handleSend(true)} disabled={isSubmitting}>
-          {isSubmitting ? 'Sending…' : 'Resend account information'}
+          {isSubmitting ? 'Sending…' : 'Resend setup invitation'}
         </button>
       )}
     </section>

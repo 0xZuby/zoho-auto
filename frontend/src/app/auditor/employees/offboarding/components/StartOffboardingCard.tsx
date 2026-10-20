@@ -24,6 +24,9 @@ export function StartOffboardingCard() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isOffboarding, setIsOffboarding] = useState(false);
   const [offboardError, setOffboardError] = useState<string | null>(null);
+  const [effectiveLeaveDate, setEffectiveLeaveDate] = useState('');
+  const [effectiveLeaveTimezone, setEffectiveLeaveTimezone] = useState('UTC');
+  const [leavingReason, setLeavingReason] = useState('');
 
   async function runSearch() {
     if (!query.trim()) return;
@@ -45,7 +48,11 @@ export function StartOffboardingCard() {
     setIsOffboarding(true);
     setOffboardError(null);
     try {
-      const offboardingRequest = await offboardEmployee(selected.id);
+      const offboardingRequest = await offboardEmployee(selected.id, {
+        effectiveLeaveDate: effectiveLeaveDate || undefined,
+        effectiveLeaveTimezone: effectiveLeaveTimezone || 'UTC',
+        leavingReason: leavingReason.trim() || undefined,
+      });
       router.push(`/auditor/requests/${offboardingRequest.id}`);
     } catch (error) {
       setOffboardError(error instanceof ApiError ? error.message : 'Could not offboard this employee.');
@@ -124,14 +131,60 @@ export function StartOffboardingCard() {
       )}
 
       {selected && (
-        <button
-          type="button"
-          className="btn btn-danger"
-          style={{ alignSelf: 'flex-start' }}
-          onClick={() => setShowConfirm(true)}
-        >
-          Offboard {selected.nameAndSurname}
-        </button>
+        <div className="stack gap-12">
+          <div className="field-row">
+            <div className="field">
+              <label className="field-label" htmlFor="effective-leave-date">
+                Effective leave date (leave blank to block access immediately)
+              </label>
+              <input
+                id="effective-leave-date"
+                type="date"
+                className="input"
+                value={effectiveLeaveDate}
+                onChange={(e) => setEffectiveLeaveDate(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="effective-leave-tz">
+                Effective timezone
+              </label>
+              <select
+                id="effective-leave-tz"
+                className="select"
+                value={effectiveLeaveTimezone}
+                onChange={(e) => setEffectiveLeaveTimezone(e.target.value)}
+              >
+                <option value="UTC">UTC (17:00 effective cutoff)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+                <option value="America/New_York">America/New_York (ET)</option>
+                <option value="Europe/Belgrade">Europe/Belgrade (CET)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label" htmlFor="leaving-reason">
+              Reason / handover note (optional)
+            </label>
+            <input
+              id="leaving-reason"
+              className="input"
+              placeholder="End of contract, voluntary resignation, etc."
+              value={leavingReason}
+              onChange={(e) => setLeavingReason(e.target.value)}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-danger"
+            style={{ alignSelf: 'flex-start' }}
+            onClick={() => setShowConfirm(true)}
+          >
+            {effectiveLeaveDate ? `Schedule or run offboarding for ${selected.nameAndSurname}` : `Offboard ${selected.nameAndSurname} now`}
+          </button>
+        </div>
       )}
 
       {showConfirm && selected && (

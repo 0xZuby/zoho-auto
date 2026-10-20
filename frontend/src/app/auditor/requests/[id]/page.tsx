@@ -5,23 +5,34 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getRequest } from '@/lib/auditor-api';
 import type { OnboardingRequest } from '@/lib/types';
-import { useAuditorUser } from '../../AuditorUserContext';
+import { useAuditorNav, useAuditorUser } from '../../AuditorUserContext';
 import { RequestHeader } from './components/RequestHeader';
+import { RequestStepTracker } from './components/RequestStepTracker';
 import { EmployeeInfoCard } from './components/EmployeeInfoCard';
 import { AccountSetupCard } from './components/AccountSetupCard';
 import { ProvisioningCard } from './components/ProvisioningCard';
 import { NotificationCard } from './components/NotificationCard';
 import { AuditTrailCard } from './components/AuditTrailCard';
 
-const BACK_LINK_BY_TYPE: Record<string, { href: string; label: string }> = {
-  NEW_HIRE: { href: '/auditor/employees/onboarding', label: 'Onboarding' },
-  LEAVING_COMPANY: { href: '/auditor/employees/offboarding', label: 'Offboarding' },
-  UPDATE_EMPLOYEE_INFO: { href: '/auditor/employees/all', label: 'All employees' },
-};
+function getSectionLink(request: OnboardingRequest): { href: string; label: string } {
+  const isOnboarded =
+    request.status === 'COMPLETED'
+    || request.status === 'NOTIFICATION_SENT'
+    || request.status === 'ACCOUNT_CREATED';
+
+  if (request.submission.requestType === 'LEAVING_COMPANY') {
+    return { href: '/auditor/employees/offboarding', label: 'Offboarding' };
+  }
+  if (request.submission.requestType === 'NEW_HIRE' && !isOnboarded) {
+    return { href: '/auditor/employees/onboarding', label: 'Onboarding' };
+  }
+  return { href: '/auditor/employees/all', label: 'All employees' };
+}
 
 export default function RequestDetailPage() {
   const params = useParams<{ id: string }>();
   useAuditorUser();
+  const { setActiveNavHref } = useAuditorNav();
   const [request, setRequest] = useState<OnboardingRequest | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -41,7 +52,12 @@ export default function RequestDetailPage() {
     };
   }, [params.id]);
 
-  const backLink = request ? BACK_LINK_BY_TYPE[request.submission.requestType] ?? BACK_LINK_BY_TYPE.UPDATE_EMPLOYEE_INFO : null;
+  const backLink = request ? getSectionLink(request) : null;
+
+  useEffect(() => {
+    setActiveNavHref(backLink ? backLink.href : null);
+    return () => setActiveNavHref(null);
+  }, [backLink, setActiveNavHref]);
 
   return (
     <main className="ops-main">
@@ -57,6 +73,7 @@ export default function RequestDetailPage() {
             </Link>
           )}
           <RequestHeader request={request} onUpdated={setRequest} />
+          <RequestStepTracker request={request} />
           {request.supersededByRequestId && (
             <div className="notice" style={{ marginBottom: 20 }}>
               This employee&rsquo;s record continues in{' '}
@@ -64,16 +81,12 @@ export default function RequestDetailPage() {
               request is kept for history and no longer editable here.
             </div>
           )}
-          <div className="request-workspace">
-            <div className="workspace-main">
-              <EmployeeInfoCard request={request} onUpdated={setRequest} />
-              <AccountSetupCard request={request} onSaved={setRequest} />
-              <ProvisioningCard request={request} onUpdated={setRequest} />
-              <NotificationCard request={request} onUpdated={setRequest} />
-            </div>
-            <aside className="workspace-side">
-              <AuditTrailCard entries={request.auditTrail} />
-            </aside>
+          <div className="request-flow-stack">
+            <EmployeeInfoCard request={request} onUpdated={setRequest} />
+            <AccountSetupCard request={request} onSaved={setRequest} />
+            <ProvisioningCard request={request} onUpdated={setRequest} />
+            <NotificationCard request={request} onUpdated={setRequest} />
+            <AuditTrailCard entries={request.auditTrail} />
           </div>
         </>
       )}

@@ -27,11 +27,11 @@ export default function AuditorLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="ops-shell">
-      <AuditorSidebar user={user} />
-      <div className="ops-shell-main">
-        <AuditorUserProvider user={user}>{children}</AuditorUserProvider>
+    <AuditorUserProvider user={user}>
+      <div className="ops-shell">
+        <AuditorSidebar user={user} />
+        <div className="ops-shell-main">{children}</div>
       </div>
-    </div>
+    </AuditorUserProvider>
   );
 }

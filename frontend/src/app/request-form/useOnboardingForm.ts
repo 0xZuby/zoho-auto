@@ -23,6 +23,8 @@ export const EMPTY_FORM_VALUES: OnboardingFormValues = {
 
   managerEmail: '',
 
+  startDate: '',
+
   githubProfile: '',
   githubRepositories: '',
 };

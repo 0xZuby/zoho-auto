@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -51,9 +51,26 @@ class Collection {
   async #persist(documents) {
     this.cache = documents;
     await mkdir(dirname(this.filePath), { recursive: true });
+    const serialized = JSON.stringify(documents, null, 2);
     const tmpPath = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(tmpPath, JSON.stringify(documents, null, 2), 'utf8');
-    await rename(tmpPath, this.filePath);
+    await writeFile(tmpPath, serialized, 'utf8');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await rename(tmpPath, this.filePath);
+        return;
+      } catch (error) {
+        if (error.code !== 'EPERM' && error.code !== 'EACCES' && error.code !== 'EBUSY') {
+          await unlink(tmpPath).catch(() => {});
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+      }
+    }
+
+    // Windows fallback when another process/watcher holds a sharing handle on the target file
+    await writeFile(this.filePath, serialized, 'utf8');
+    await unlink(tmpPath).catch(() => {});
   }
 
   find(predicate = () => true) {

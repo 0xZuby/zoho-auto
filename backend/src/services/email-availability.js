@@ -12,7 +12,9 @@ export function createEmailAvailabilityChecker(requestRepository) {
       const full = await requestRepository.getById(summary.id);
       const claimedEmail = full.resolvedAccount?.corporateEmail;
       if (claimedEmail && claimedEmail.toLowerCase() === String(corporateEmail).toLowerCase()) {
-        const hasSucceededCreate = full.provisioning.steps.some((step) => step.name === 'create_user' && step.outcome === 'SUCCESS');
+        const hasSucceededCreate = full.provisioning.steps.some(
+          (step) => (step.name === 'create_user' || step.name === 'create_im_user') && step.outcome === 'SUCCESS',
+        );
         if (hasSucceededCreate) return false;
       }
     }

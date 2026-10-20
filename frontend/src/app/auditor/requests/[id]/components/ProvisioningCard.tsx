@@ -12,13 +12,16 @@ interface ProvisioningCardProps {
 }
 
 const STEP_LABEL_FALLBACK: Record<string, string> = {
-  validate_employee: 'Employee validated',
+  validate_employee: 'Employee & approved configuration validated',
   check_email_availability: 'Email availability checked',
-  create_user: 'Zoho user created',
-  enable_mail: 'Zoho Mail enabled',
-  assign_groups: 'Groups assigned',
+  create_user: 'Zoho Mail account created',
+  create_im_user: 'InsideMaps account created via API',
+  assign_im_roles: 'InsideMaps roles assigned via API',
+  enforce_security_policy: '2SV & first-login password change policy enforced',
   verify_configuration: 'Account configuration verified',
-  deactivate_user: 'Zoho account deactivated',
+  deactivate_user: 'Zoho account deactivated & sessions revoked',
+  remove_im_roles: 'InsideMaps roles removed via API',
+  delete_im_user: 'InsideMaps account deleted via API',
   request_insidemaps_access: 'InsideMaps account requested (employee signup pending)',
   revoke_insidemaps_access: 'InsideMaps account access revoked',
 };
@@ -28,12 +31,20 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isInsideMaps = request.resolvedAccount?.accountType === 'INSIDEMAPS';
+  const accountType = request.resolvedAccount?.accountType;
+  const isInsideMaps = accountType === 'INSIDEMAPS';
   const isLeavingCompany = request.submission.requestType === 'LEAVING_COMPANY';
-  const canCreate = request.status === 'APPROVED' && Boolean(request.resolvedAccount);
+  const canCreate =
+    (request.status === 'APPROVED' || request.status === 'SCHEDULED_OFFBOARDING') && Boolean(request.resolvedAccount);
   const canRetry = request.status === 'PARTIALLY_PROVISIONED' || request.status === 'PROVISIONING_FAILED';
   const hasRun = request.provisioning.steps.length > 0;
-  const createLabel = isLeavingCompany ? 'Disable access' : isInsideMaps ? 'Request InsideMaps account' : 'Create Zoho user';
+  const createLabel = isLeavingCompany
+    ? 'Disable access now'
+    : isInsideMaps
+      ? 'Create InsideMaps account'
+      : accountType === 'ZOHO_AND_INSIDEMAPS'
+        ? 'Create Zoho Mail + InsideMaps'
+        : 'Create Zoho Mail';
 
   async function handleProvision() {
     setIsSubmitting(true);
@@ -83,17 +94,44 @@ export function ProvisioningCard({ request, onUpdated }: ProvisioningCardProps) 
       </div>
       <p className="card-section-intro">
         {isLeavingCompany
-          ? 'Offboarding disables Zoho Mail and revokes InsideMaps access in one step \u2014 both are attempted regardless of the account type this employee had.'
+          ? 'Offboarding disables Zoho Mail, revokes active sessions/tokens, and removes/deletes InsideMaps access via API.'
           : isInsideMaps
-            ? 'InsideMaps accounts aren\u2019t provisioned automatically yet \u2014 this records that access was requested.'
-            : 'Each action is recorded separately so failed steps can be retried without creating a duplicate account.'}
+            ? 'Calls InsideMaps APIs to create the user, assign roles, and enforce 2SV & first-login password change.'
+              : accountType === 'ZOHO_AND_INSIDEMAPS'
+                ? 'Creates the Zoho Mailbox directly, then the InsideMaps user with roles and 2SV. Failed steps can be retried.'
+                : 'Creates the Zoho Mail mailbox directly (no invitation). Failed steps can be retried idempotently.'}
       </p>
+
+      {request.status === 'SCHEDULED_OFFBOARDING' && request.offboardingSchedule && (
+        <div className="notice notice-info">
+          <strong>Scheduled offboarding:</strong> Access is scheduled to be blocked on{' '}
+          <strong>{request.offboardingSchedule.effectiveDate}</strong> ({request.offboardingSchedule.timezone}). You can
+          also click &ldquo;Disable access now&rdquo; above to execute immediately.
+        </div>
+      )}
+
+      {request.provisioning.securityPolicy && (
+        <div className="notice notice-success">
+          <strong>Security policy enforced:</strong> 2-Step Verification (2SV) required:{' '}
+          <code>{request.provisioning.securityPolicy.twoStepVerificationRequired ? 'Yes' : 'No'}</code> · Force password
+          change on first login:{' '}
+          <code>{request.provisioning.securityPolicy.forcePasswordChangeOnFirstLogin ? 'Yes' : 'No'}</code> · 2SV
+          enrollment:{' '}
+          <code>
+            {request.provisioning.securityPolicy.twoStepVerificationEnrolled ? 'Enrolled' : 'Pending first login'}
+          </code>
+        </div>
+      )}
 
       {error && <div className="notice notice-error">{error}</div>}
 
       {request.provisioning.failureReason && (
         <div className="notice notice-error">
-          <strong>Failure:</strong> {request.provisioning.failureReason}
+          <strong>
+            Failure ({request.provisioning.failureSystem || 'INTEGRATION'} ·{' '}
+            {request.provisioning.failureStep || 'step'}):
+          </strong>{' '}
+          {request.provisioning.failureReason}
         </div>
       )}
 
@@ -125,8 +163,13 @@ function StepRow({ step }: { step: ProvisioningStep }) {
       <span aria-hidden style={{ color: isSuccess ? 'var(--accent-strong)' : 'var(--danger)', fontWeight: 700 }}>
         {isSuccess ? '✓' : '✗'}
       </span>
+      {step.system && (
+        <span className="chip chip-neutral" style={{ fontSize: 11, padding: '1px 6px' }}>
+          {step.system}
+        </span>
+      )}
       <span className="text-sm">{step.label ?? STEP_LABEL_FALLBACK[step.name] ?? step.name}</span>
-      {!isSuccess && step.error && <span className="text-faint text-sm">— {step.error}</span>}
+      {!isSuccess && step.error && <span className="text-faint text-sm">- {step.error}</span>}
     </li>
   );
 }
