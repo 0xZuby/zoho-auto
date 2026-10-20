@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getRequest } from '@/lib/auditor-api';
+import { getRequest, getZohoLiveStatus } from '@/lib/auditor-api';
 import type { OnboardingRequest } from '@/lib/types';
 import { useAuditorNav, useAuditorUser } from '../../AuditorUserContext';
 import { RequestHeader } from './components/RequestHeader';
@@ -31,10 +31,17 @@ function getSectionLink(request: OnboardingRequest): { href: string; label: stri
 
 export default function RequestDetailPage() {
   const params = useParams<{ id: string }>();
-  useAuditorUser();
+  const user = useAuditorUser();
   const { setActiveNavHref } = useAuditorNav();
   const [request, setRequest] = useState<OnboardingRequest | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [zohoLive, setZohoLive] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getZohoLiveStatus()
+      .then((result) => setZohoLive(result.live))
+      .catch(() => setZohoLive(null));
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,6 +81,16 @@ export default function RequestDetailPage() {
           )}
           <RequestHeader request={request} onUpdated={setRequest} />
           <RequestStepTracker request={request} />
+          {zohoLive === false && (
+            <div className="notice notice-error" style={{ marginBottom: 20 }}>
+              <strong>Zoho is not connected.</strong> The app is running in simulated mode, so no real mailbox is created.{' '}
+              {user.role === 'ADMINISTRATOR' ? (
+                <Link href="/auditor/integrations/zoho">Connect Zoho Mail</Link>
+              ) : (
+                'Ask an administrator to connect the Zoho organization account.'
+              )}
+            </div>
+          )}
           {request.supersededByRequestId && (
             <div className="notice" style={{ marginBottom: 20 }}>
               This employee&rsquo;s record continues in{' '}

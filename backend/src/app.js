@@ -53,6 +53,8 @@ export async function createApp(config) {
   for (const method of ['createUser', 'deleteUser', 'verifyConfiguration', 'deactivateUser']) {
     zohoClient[method] = (args) => zohoClient.call(method, args);
   }
+  const isZohoLive = async () =>
+    config.ZOHO_MODE === 'live' || Boolean(await zohoCredentials.findOne((entry) => entry.key === 'oauth'));
   const insideMapsClient = createInsideMapsClient(config);
   const mailer = createMailer(config, config.DATA_DIR);
   const checkEmailAvailability = createEmailAvailabilityChecker(requestRepository);
@@ -92,7 +94,7 @@ export async function createApp(config) {
   );
   app.use('/api/form', createFormRouter({ requestRepository, provisioningService }));
   app.use('/api/auth', createAuthRouter({ userRepository, sessionManager, isProduction: config.isProduction }));
-  app.use('/api/auditor', createAuditorRouter({ requestRepository, provisioningService, notificationService }));
+  app.use('/api/auditor', createAuditorRouter({ requestRepository, provisioningService, notificationService, isZohoLive }));
   app.use('/api/admin', createAdminRouter({
     userRepository, rulesRepository, zohoConfig: config, zohoCredentials, sessionSecret: config.SESSION_SECRET,
   }));

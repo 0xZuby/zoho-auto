@@ -13,6 +13,10 @@ export function getMetrics(): Promise<DashboardMetrics> {
   return apiRequest('/auditor/metrics');
 }
 
+export function getZohoLiveStatus(): Promise<{ live: boolean }> {
+  return apiRequest('/auditor/zoho-status');
+}
+
 export function listRequests(): Promise<RequestSummary[]> {
   return apiRequest('/auditor/requests');
 }

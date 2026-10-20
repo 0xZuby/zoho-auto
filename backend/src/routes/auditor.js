@@ -27,7 +27,7 @@ function redactSecrets(value) {
  * Every route here requires an authenticated session with AUDITOR or
  * ADMINISTRATOR role.
  */
-export function createAuditorRouter({ requestRepository, provisioningService, notificationService }) {
+export function createAuditorRouter({ requestRepository, provisioningService, notificationService, isZohoLive = async () => false }) {
   const router = Router();
   router.use(requireRole(ROLE.AUDITOR, ROLE.ADMINISTRATOR));
   router.use((_req, res, next) => {
@@ -35,6 +35,13 @@ export function createAuditorRouter({ requestRepository, provisioningService, no
     res.json = (body) => json(redactSecrets(body));
     next();
   });
+
+  router.get(
+    '/zoho-status',
+    asyncHandler(async (_req, res) => {
+      res.json({ live: await isZohoLive() });
+    }),
+  );
 
   router.get(
     '/metrics',
